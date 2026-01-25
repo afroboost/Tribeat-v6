@@ -254,6 +254,9 @@ test_plan:
     - "Background and Visual Effects"
     - "Responsive Design"
     - "Interactive Elements"
+    - "TypeScript Conversion"
+    - "Dynamic Theme Content from theme.json"
+    - "CSS Variables --bt- Prefix"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
