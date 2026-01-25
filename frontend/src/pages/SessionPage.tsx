@@ -4,6 +4,7 @@ import { AudioPlayer } from '@/components/audio/AudioPlayer';
 import { PlaylistDnD, Track } from '@/components/audio/PlaylistDnD';
 import { ParticipantControls, Participant } from '@/components/audio/ParticipantControls';
 import { HostMicControl } from '@/components/audio/HostMicControl';
+import { TrackUploader } from '@/components/audio/TrackUploader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,7 @@ import { useSocket } from '@/context/SocketContext';
 import { useToast } from '@/components/ui/Toast';
 import { generateSessionId } from '@/hooks/useAudioSync';
 import type { AudioState, SyncState } from '@/hooks/useAudioSync';
+import { isSupabaseConfigured } from '@/lib/supabaseClient';
 
 // LocalStorage key for nickname
 const NICKNAME_STORAGE_KEY = 'bt_nickname';
