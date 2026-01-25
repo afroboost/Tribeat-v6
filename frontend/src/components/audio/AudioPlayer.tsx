@@ -49,7 +49,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   } = useAudioSync({ isHost, sessionId, onStateChange, onSyncUpdate });
 
   const [showVolume, setShowVolume] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
 
   // Load audio when src changes
   useEffect(() => {
