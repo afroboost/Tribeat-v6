@@ -433,38 +433,69 @@ export const SessionPage: React.FC = () => {
     if (!nickname) return participantsState;
     
     const currentUser: Participant = {
-      id: 'current-user',
+      id: socket.userId,
       name: nickname,
       avatar: generateAvatar(nickname),
       isSynced: true,
       isCurrentUser: true,
       isHost: isHost,
       volume: 100,
-      isMuted: false,
+      isMuted: isRemoteMuted,
     };
     
     // Place current user at the top
     return [currentUser, ...participantsState];
-  }, [nickname, isHost, participantsState]);
+  }, [nickname, isHost, participantsState, socket.userId, isRemoteMuted]);
 
-  // Participant moderation handlers
+  // Participant moderation handlers (Host only - sends socket commands)
   const handleParticipantVolumeChange = useCallback((id: string, volume: number) => {
+    // Update local state
     setParticipantsState(prev => 
       prev.map(p => p.id === id ? { ...p, volume, isMuted: volume === 0 } : p)
     );
-  }, []);
+    
+    // Send socket command
+    if (isHost) {
+      socket.setUserVolume(id, volume);
+      console.log('[SOCKET OUT] Volume change:', { targetId: id, volume });
+    }
+  }, [isHost, socket]);
 
   const handleParticipantMuteToggle = useCallback((id: string) => {
+    const participant = participantsState.find(p => p.id === id);
+    const newMuted = !participant?.isMuted;
+    
+    // Update local state
     setParticipantsState(prev =>
-      prev.map(p => p.id === id ? { ...p, isMuted: !p.isMuted } : p)
+      prev.map(p => p.id === id ? { ...p, isMuted: newMuted } : p)
     );
-  }, []);
+    
+    // Send socket command
+    if (isHost) {
+      if (newMuted) {
+        socket.muteUser(id);
+        showToast(`🔇 ${participant?.name} mis en sourdine`, 'info');
+      } else {
+        socket.unmuteUser(id);
+        showToast(`🔊 ${participant?.name} réactivé`, 'info');
+      }
+      console.log('[SOCKET OUT] Mute toggle:', { targetId: id, muted: newMuted });
+    }
+  }, [isHost, participantsState, socket, showToast]);
 
   const handleParticipantEject = useCallback((id: string) => {
     const participant = participantsState.find(p => p.id === id);
+    
+    // Update local state
     setParticipantsState(prev => prev.filter(p => p.id !== id));
-    showToast(`${participant?.name || 'Participant'} a été éjecté`, 'success');
-  }, [participantsState, showToast]);
+    
+    // Send socket command
+    if (isHost) {
+      socket.ejectUser(id);
+      showToast(`❌ ${participant?.name || 'Participant'} a été éjecté`, 'success');
+      console.log('[SOCKET OUT] Eject user:', { targetId: id });
+    }
+  }, [isHost, participantsState, socket, showToast]);
 
   // Playlist reorder handler
   const handlePlaylistReorder = useCallback((newTracks: Track[]) => {
