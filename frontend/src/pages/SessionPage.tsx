@@ -1,6 +1,9 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { AudioPlayer } from '@/components/audio/AudioPlayer';
+import { PlaylistDnD, Track } from '@/components/audio/PlaylistDnD';
+import { ParticipantControls, Participant } from '@/components/audio/ParticipantControls';
+import { HostMicControl } from '@/components/audio/HostMicControl';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
