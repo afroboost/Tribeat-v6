@@ -1,6 +1,8 @@
 {
   "name": "Beattribe",
   "slogan": "Unite Through Rhythm",
+  "description": "Rejoignez la communauté des beatmakers et producteurs. Partagez vos créations, collaborez et évoluez ensemble.",
+  "badge": "La communauté des créateurs de musique",
   "colors": {
     "background": "#000000",
     "primary": "#8A2EFF",
@@ -18,13 +20,32 @@
     }
   },
   "fonts": {
-    "heading": "Space Grotesk",
-    "body": "Inter"
+    "heading": "'Space Grotesk', sans-serif",
+    "body": "'Inter', sans-serif"
   },
   "borderRadius": {
     "sm": "6px",
     "md": "12px",
     "lg": "16px",
     "full": "9999px"
-  }
+  },
+  "navigation": {
+    "links": [
+      { "label": "Fonctionnalités", "href": "#features" },
+      { "label": "Communauté", "href": "#community" },
+      { "label": "Tarifs", "href": "#pricing" }
+    ]
+  },
+  "buttons": {
+    "login": "Connexion",
+    "start": "Commencer",
+    "joinTribe": "Rejoindre la tribu",
+    "exploreBeats": "Explorer les beats"
+  },
+  "stats": [
+    { "value": "50K+", "label": "Créateurs" },
+    { "value": "1M+", "label": "Beats partagés" },
+    { "value": "120+", "label": "Pays" }
+  ],
+  "scrollIndicator": "Découvrir"
 }
