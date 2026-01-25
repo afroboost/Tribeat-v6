@@ -1,6 +1,9 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { Input } from "@/components/ui/input";
 import { useTheme } from "@/context/ThemeContext";
+import { useToast } from "@/components/ui/Toast";
 
 // Interface for particle configuration
 interface Particle {
@@ -14,8 +17,14 @@ interface Particle {
 }
 
 export const HeroSection: React.FC = () => {
+  const navigate = useNavigate();
   const { theme } = useTheme();
+  const { showToast } = useToast();
   const { name, slogan, description, badge, colors, fonts, buttons, stats, scrollIndicator } = theme;
+
+  // Session code input state
+  const [sessionCode, setSessionCode] = useState<string>("");
+  const [isJoining, setIsJoining] = useState<boolean>(false);
 
   // Generate particles with memoization to prevent re-renders
   const particles = useMemo<Particle[]>(() => {
@@ -29,6 +38,37 @@ export const HeroSection: React.FC = () => {
       delay: Math.random() * 2,
     }));
   }, [colors.primary, colors.secondary]);
+
+  // Handle join session
+  const handleJoinSession = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const trimmedCode = sessionCode.trim().toUpperCase();
+    
+    if (!trimmedCode) {
+      showToast("Veuillez entrer un code de session", "error");
+      return;
+    }
+    
+    setIsJoining(true);
+    
+    // Small delay for UX feedback
+    setTimeout(() => {
+      navigate(`/session/${trimmedCode}`);
+    }, 300);
+  }, [sessionCode, navigate, showToast]);
+
+  // Handle create new session
+  const handleCreateSession = useCallback(() => {
+    navigate("/session");
+  }, [navigate]);
+
+  // Handle input change
+  const handleCodeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    // Convert to uppercase and remove spaces
+    const value = e.target.value.toUpperCase().replace(/\s/g, "");
+    setSessionCode(value);
+  }, []);
 
   return (
     <section 
@@ -160,18 +200,117 @@ export const HeroSection: React.FC = () => {
           {description}
         </p>
 
-        {/* CTA Buttons - Dynamic from theme */}
+        {/* Session Join Form */}
         <div 
-          className="flex flex-col sm:flex-row items-center justify-center gap-4 opacity-0"
+          className="max-w-md mx-auto mb-8 opacity-0"
           style={{
             animation: "bt-fade-in 0.8s ease-out 1s forwards",
           }}
         >
-          <PrimaryButton size="lg">
-            {buttons.joinTribe}
-          </PrimaryButton>
-          <PrimaryButton variant="outline" size="lg">
-            {buttons.exploreBeats}
+          <form onSubmit={handleJoinSession} className="space-y-4">
+            {/* Session Code Input */}
+            <div className="relative">
+              <Input
+                type="text"
+                value={sessionCode}
+                onChange={handleCodeChange}
+                placeholder="Code de la session (ex: MKTQUYEY-5LFJ94)"
+                className="w-full h-14 px-5 text-center text-lg font-mono tracking-wider rounded-xl border-2 transition-all duration-200"
+                style={{
+                  background: colors.surface,
+                  borderColor: sessionCode ? colors.primary : 'rgba(255,255,255,0.1)',
+                  color: '#FFFFFF',
+                }}
+                maxLength={20}
+                disabled={isJoining}
+              />
+              {/* Decorative music note icon */}
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                <svg 
+                  className="w-5 h-5 text-white/30"
+                  fill="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                </svg>
+              </div>
+            </div>
+
+            {/* Join Button */}
+            <PrimaryButton 
+              type="submit"
+              size="lg"
+              className="w-full h-14 text-lg"
+              disabled={isJoining}
+            >
+              {isJoining ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Connexion...
+                </span>
+              ) : (
+                <>
+                  🎧 {buttons.joinTribe}
+                </>
+              )}
+            </PrimaryButton>
+          </form>
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-white/10" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span 
+                className="px-3"
+                style={{ 
+                  background: colors.background,
+                  color: colors.text.muted,
+                }}
+              >
+                ou
+              </span>
+            </div>
+          </div>
+
+          {/* Create Session Button */}
+          <button
+            onClick={handleCreateSession}
+            className="w-full h-12 rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.2)',
+              color: colors.text.secondary,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = colors.primary;
+              e.currentTarget.style.color = '#FFFFFF';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+              e.currentTarget.style.color = colors.text.secondary;
+            }}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Créer ma session
+          </button>
+        </div>
+
+        {/* Secondary CTA */}
+        <div 
+          className="opacity-0"
+          style={{
+            animation: "bt-fade-in 0.8s ease-out 1.2s forwards",
+          }}
+        >
+          <PrimaryButton variant="ghost" size="sm" className="text-white/60 hover:text-white">
+            {buttons.exploreBeats} →
           </PrimaryButton>
         </div>
 
@@ -179,7 +318,7 @@ export const HeroSection: React.FC = () => {
         <div 
           className="grid grid-cols-3 gap-8 mt-16 pt-8 border-t border-white/10 max-w-lg mx-auto opacity-0"
           style={{
-            animation: "bt-fade-in 0.8s ease-out 1.2s forwards",
+            animation: "bt-fade-in 0.8s ease-out 1.4s forwards",
           }}
         >
           {stats.map((stat, index) => (
@@ -214,7 +353,7 @@ export const HeroSection: React.FC = () => {
       <div 
         className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-0"
         style={{
-          animation: "bt-fade-in 0.8s ease-out 1.4s forwards",
+          animation: "bt-fade-in 0.8s ease-out 1.6s forwards",
         }}
       >
         <span 
