@@ -18,8 +18,15 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
+// Safe check for browser environment
+const isBrowser = (): boolean => {
+  return typeof window !== "undefined" && typeof sessionStorage !== "undefined";
+};
+
 // Check if authentication is still valid
 function checkAuthValidity(): boolean {
+  if (!isBrowser()) return false;
+  
   try {
     const stored = sessionStorage.getItem(AUTH_STORAGE_KEY);
     if (stored) {
@@ -28,62 +35,120 @@ function checkAuthValidity(): boolean {
       if (authState.authenticated && (now - authState.timestamp) < AUTH_EXPIRY_MS) {
         return true;
       }
+      // Clean up expired session
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
     }
   } catch (error) {
     console.warn("Auth check failed:", error);
+    // Clean up corrupted data
+    try {
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch {
+      // Ignore cleanup errors
+    }
   }
   return false;
 }
 
 // Store authentication state
-function storeAuth(): void {
-  const authState: AuthState = {
-    authenticated: true,
-    timestamp: Date.now(),
-  };
-  sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
+function storeAuth(): boolean {
+  if (!isBrowser()) return false;
+  
+  try {
+    const authState: AuthState = {
+      authenticated: true,
+      timestamp: Date.now(),
+    };
+    sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
+    return true;
+  } catch (error) {
+    console.error("Failed to store auth:", error);
+    return false;
+  }
 }
 
 // Clear authentication
 function clearAuth(): void {
-  sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  if (!isBrowser()) return;
+  
+  try {
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch (error) {
+    console.warn("Failed to clear auth:", error);
+  }
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => checkAuthValidity());
+  // Initialize auth state - check on first render
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Re-check auth on mount
+  // Check auth on mount (client-side only)
   useEffect(() => {
     const isValid = checkAuthValidity();
     setIsAuthenticated(isValid);
+    setIsInitialized(true);
   }, []);
 
+  // Handle form submission
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
 
-    // Simulate a small delay for security
+    // Small delay for UX and security
     setTimeout(() => {
       if (password === ADMIN_PASSWORD) {
-        storeAuth();
-        setIsAuthenticated(true);
-        setPassword("");
+        const stored = storeAuth();
+        if (stored) {
+          setIsAuthenticated(true);
+          setPassword("");
+          setError("");
+        } else {
+          setError("Erreur de stockage de session");
+        }
       } else {
-        setError("Mot de passe incorrect");
+        setError("Accès refusé - Mot de passe incorrect");
         setPassword("");
       }
       setIsLoading(false);
     }, 500);
   }, [password]);
 
+  // Handle logout
   const handleLogout = useCallback(() => {
     clearAuth();
     setIsAuthenticated(false);
+    setPassword("");
+    setError("");
   }, []);
+
+  // Handle password input change
+  const handlePasswordChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+    if (error) setError(""); // Clear error on new input
+  }, [error]);
+
+  // Show loading state while initializing
+  if (!isInitialized) {
+    return (
+      <div 
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: "#000000" }}
+      >
+        <div className="flex items-center gap-3 text-white/60">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span style={{ fontFamily: "'Inter', sans-serif" }}>Chargement...</span>
+        </div>
+      </div>
+    );
+  }
 
   // If authenticated, render children with logout capability
   if (isAuthenticated) {
@@ -102,7 +167,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  // Login screen
+  // Login screen - NOT authenticated
   return (
     <div 
       className="min-h-screen flex items-center justify-center p-4"
@@ -123,7 +188,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         />
       </div>
 
-      <Card className="w-full max-w-md border-white/10 bg-black/50 backdrop-blur-xl">
+      <Card className="w-full max-w-md border-white/10 bg-black/50 backdrop-blur-xl relative z-10">
         <CardHeader className="text-center">
           {/* Logo */}
           <div className="flex justify-center mb-4">
@@ -145,63 +210,72 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
             className="text-2xl text-white"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
-            Admin Panel
+            Beattribe Admin
           </CardTitle>
           <CardDescription className="text-white/50">
-            Accès restreint - Veuillez vous authentifier
+            Accès restreint - Veuillez entrer le mot de passe
           </CardDescription>
         </CardHeader>
         
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-white/70">
-                Mot de passe
+              <Label htmlFor="admin-password" className="text-white/70">
+                Mot de passe administrateur
               </Label>
               <Input
-                id="password"
+                id="admin-password"
+                name="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Entrez le mot de passe admin"
-                className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-[#8A2EFF]"
+                onChange={handlePasswordChange}
+                placeholder="Entrez le mot de passe"
+                className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-[#8A2EFF] h-12"
                 autoFocus
+                autoComplete="current-password"
                 disabled={isLoading}
               />
             </div>
 
             {error && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                ⚠️ {error}
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{error}</span>
               </div>
             )}
 
             <Button
               type="submit"
-              disabled={isLoading || !password}
-              className="w-full h-11 text-white border-none"
+              disabled={isLoading || password.length === 0}
+              className="w-full h-12 text-white border-none font-medium text-base"
               style={{ 
-                background: "linear-gradient(135deg, #8A2EFF 0%, #FF2FB3 100%)",
-                boxShadow: "0 4px 24px rgba(138, 46, 255, 0.35)",
+                background: password.length > 0 
+                  ? "linear-gradient(135deg, #8A2EFF 0%, #FF2FB3 100%)"
+                  : "rgba(255,255,255,0.1)",
+                boxShadow: password.length > 0 
+                  ? "0 4px 24px rgba(138, 46, 255, 0.35)"
+                  : "none",
               }}
             >
               {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   Vérification...
                 </span>
               ) : (
-                "Accéder au panneau admin"
+                "Entrer"
               )}
             </Button>
           </form>
 
           <div className="mt-6 pt-4 border-t border-white/10 text-center">
             <p className="text-white/30 text-xs">
-              Session valide pendant 30 minutes
+              🔐 Session sécurisée • Expiration: 30 minutes
             </p>
           </div>
         </CardContent>
