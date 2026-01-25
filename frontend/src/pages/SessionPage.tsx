@@ -522,6 +522,26 @@ export const SessionPage: React.FC = () => {
     console.log('[SOCKET OUT] Track selected:', { trackId: track.id });
   }, [showToast, isHost, socket, tracks]);
 
+  // Handle track upload
+  const handleTrackUploaded = useCallback((newTrack: Track) => {
+    if (tracks.length >= 10) {
+      showToast('Limite de 10 titres atteinte', 'warning');
+      return;
+    }
+    
+    setTracks(prev => [...prev, newTrack]);
+    showToast(`🎵 "${newTrack.title}" ajouté à la playlist`, 'success');
+    
+    // Sync to participants
+    const updatedTracks = [...tracks, newTrack];
+    socket.syncPlaylist(updatedTracks, selectedTrack.id);
+    
+    // Save to database if configured
+    socket.savePlaylistToDb(updatedTracks, selectedTrack.id);
+    
+    console.log('[UPLOAD] Track added:', newTrack.title);
+  }, [tracks, selectedTrack.id, socket, showToast]);
+
   // Initialize - check for stored nickname
   useEffect(() => {
     const stored = getStoredNickname();
