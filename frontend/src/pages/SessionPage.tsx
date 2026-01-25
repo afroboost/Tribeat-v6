@@ -337,6 +337,10 @@ export const SessionPage: React.FC = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const { showToast } = useToast();
+  const socket = useSocket();
+  
+  // Audio element ref for remote mute control
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
   
   // Track if user created this session (host) or joined via URL (participant)
   const [isHost, setIsHost] = useState<boolean>(!urlSessionId);
@@ -346,6 +350,9 @@ export const SessionPage: React.FC = () => {
   const [nickname, setNickname] = useState<string | null>(null);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Remote mute state (controlled by host)
+  const [isRemoteMuted, setIsRemoteMuted] = useState(false);
   
   // Playlist state (draggable)
   const [tracks, setTracks] = useState<Track[]>(DEMO_TRACKS);
@@ -361,6 +368,65 @@ export const SessionPage: React.FC = () => {
   const [audioState, setAudioState] = useState<AudioState | null>(null);
   const [syncState, setSyncState] = useState<SyncState | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // Join socket session when session ID is available
+  useEffect(() => {
+    if (sessionId && socket.userId && nickname) {
+      socket.joinSession(sessionId, socket.userId, isHost);
+      console.log('[SESSION] Joined via socket:', { sessionId, isHost, userId: socket.userId });
+    }
+    
+    return () => {
+      if (socket.isConnected) {
+        socket.leaveSession();
+      }
+    };
+  }, [sessionId, socket.userId, nickname, isHost]);
+
+  // Listen for remote mute commands (for participants)
+  useEffect(() => {
+    if (isHost) return; // Host doesn't receive mute commands
+    
+    const unsubMute = socket.onMuted((muted) => {
+      console.log('[SOCKET] Received mute command:', muted);
+      setIsRemoteMuted(muted);
+      
+      // Directly mute the audio element
+      if (audioElementRef.current) {
+        audioElementRef.current.muted = muted;
+      }
+    });
+    
+    return unsubMute;
+  }, [socket, isHost]);
+
+  // Listen for ejection (for participants)
+  useEffect(() => {
+    if (isHost) return;
+    
+    const unsubEject = socket.onEjected(() => {
+      console.log('[SOCKET] Received eject command');
+      // Navigation and toast are handled in SocketContext
+    });
+    
+    return unsubEject;
+  }, [socket, isHost]);
+
+  // Listen for playlist sync (for participants)
+  useEffect(() => {
+    if (isHost) return;
+    
+    const unsubPlaylist = socket.onPlaylistSync((payload) => {
+      console.log('[SOCKET] Received playlist sync:', payload);
+      setTracks(payload.tracks as Track[]);
+      const newSelected = payload.tracks.find(t => t.id === payload.selectedTrackId);
+      if (newSelected) {
+        setSelectedTrack(newSelected as Track);
+      }
+    });
+    
+    return unsubPlaylist;
+  }, [socket, isHost]);
 
   // Build participants list with current user
   const participants = useMemo<Participant[]>(() => {
