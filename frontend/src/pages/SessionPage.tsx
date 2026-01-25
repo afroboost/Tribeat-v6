@@ -1,14 +1,18 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { AudioPlayer } from '@/components/audio/AudioPlayer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/components/ui/Toast';
 import { generateSessionId } from '@/hooks/useAudioSync';
 import type { AudioState, SyncState } from '@/hooks/useAudioSync';
+
+// LocalStorage key for nickname
+const NICKNAME_STORAGE_KEY = 'bt_nickname';
 
 // Demo tracks for testing
 const DEMO_TRACKS = [
@@ -40,15 +44,161 @@ interface Participant {
   name: string;
   avatar: string;
   isSynced: boolean;
+  isCurrentUser?: boolean;
+  isHost?: boolean;
 }
 
-// Mock participants
-const MOCK_PARTICIPANTS: Participant[] = [
-  { id: '1', name: 'Alex M.', avatar: 'AM', isSynced: true },
+// Base mock participants (will be augmented with current user)
+const BASE_PARTICIPANTS: Participant[] = [
   { id: '2', name: 'Sarah K.', avatar: 'SK', isSynced: true },
-  { id: '3', name: 'Mike R.', avatar: 'MR', isSynced: false },
-  { id: '4', name: 'Emma L.', avatar: 'EL', isSynced: true },
+  { id: '3', name: 'Alex M.', avatar: 'AM', isSynced: true },
+  { id: '4', name: 'Emma L.', avatar: 'EL', isSynced: false },
 ];
+
+// Helper functions for LocalStorage
+function getStoredNickname(): string | null {
+  try {
+    return localStorage.getItem(NICKNAME_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredNickname(nickname: string): void {
+  try {
+    localStorage.setItem(NICKNAME_STORAGE_KEY, nickname);
+  } catch (error) {
+    console.warn('Failed to store nickname:', error);
+  }
+}
+
+// Generate avatar initials from name
+function generateAvatar(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+}
+
+// Nickname Modal Component
+interface NicknameModalProps {
+  isOpen: boolean;
+  isHost: boolean;
+  onSubmit: (nickname: string) => void;
+  theme: ReturnType<typeof useTheme>['theme'];
+}
+
+const NicknameModal: React.FC<NicknameModalProps> = ({ isOpen, isHost, onSubmit, theme }) => {
+  const [nickname, setNickname] = useState(isHost ? 'Coach' : '');
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = nickname.trim();
+    
+    if (!trimmed) {
+      setError('Veuillez entrer un pseudo');
+      return;
+    }
+    
+    if (trimmed.length < 2) {
+      setError('Le pseudo doit contenir au moins 2 caractères');
+      return;
+    }
+    
+    if (trimmed.length > 20) {
+      setError('Le pseudo ne peut pas dépasser 20 caractères');
+      return;
+    }
+    
+    onSubmit(trimmed);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+      />
+      
+      {/* Modal */}
+      <Card 
+        className="relative z-10 w-full max-w-md border-2 bg-black/90 backdrop-blur-xl"
+        style={{ borderColor: theme.colors.primary }}
+      >
+        <CardHeader className="text-center pb-4">
+          {/* Avatar preview */}
+          <div className="flex justify-center mb-4">
+            <div 
+              className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold text-white"
+              style={{ background: theme.colors.gradient.primary }}
+            >
+              {nickname ? generateAvatar(nickname) : '?'}
+            </div>
+          </div>
+          
+          <CardTitle 
+            className="text-2xl text-white"
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+          >
+            {isHost ? 'Bienvenue, Coach !' : 'Rejoindre la tribu'}
+          </CardTitle>
+          <CardDescription className="text-white/60">
+            {isHost 
+              ? 'Choisissez votre nom pour cette session'
+              : 'Sous quel nom rejoignez-vous la tribu ?'
+            }
+          </CardDescription>
+        </CardHeader>
+        
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="nickname" className="text-white/70">
+                Votre pseudo
+              </Label>
+              <Input
+                id="nickname"
+                type="text"
+                value={nickname}
+                onChange={(e) => {
+                  setNickname(e.target.value);
+                  setError('');
+                }}
+                placeholder={isHost ? 'Coach' : 'Entrez votre pseudo'}
+                className="h-12 text-lg text-center bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-[#8A2EFF]"
+                autoFocus
+                maxLength={20}
+              />
+            </div>
+
+            {error && (
+              <p className="text-red-400 text-sm text-center">{error}</p>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full h-12 text-white border-none font-medium"
+              style={{
+                background: theme.colors.gradient.primary,
+                boxShadow: '0 4px 24px rgba(138, 46, 255, 0.35)',
+              }}
+            >
+              {isHost ? '🎵 Démarrer la session' : '🎧 Rejoindre l\'écoute'}
+            </Button>
+          </form>
+
+          <p className="mt-4 text-center text-white/40 text-xs">
+            Votre pseudo sera visible par tous les participants
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
 // Session creation view
 interface CreateSessionViewProps {
@@ -148,19 +298,72 @@ export const SessionPage: React.FC = () => {
   const [isHost, setIsHost] = useState<boolean>(!urlSessionId);
   const [sessionId, setSessionId] = useState<string | null>(urlSessionId || null);
   
+  // Nickname state
+  const [nickname, setNickname] = useState<string | null>(null);
+  const [showNicknameModal, setShowNicknameModal] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  
   const [selectedTrack, setSelectedTrack] = useState(DEMO_TRACKS[0]);
   const [audioState, setAudioState] = useState<AudioState | null>(null);
   const [syncState, setSyncState] = useState<SyncState | null>(null);
-  const [participants] = useState<Participant[]>(MOCK_PARTICIPANTS);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // Build participants list with current user
+  const participants = useMemo<Participant[]>(() => {
+    if (!nickname) return BASE_PARTICIPANTS;
+    
+    const currentUser: Participant = {
+      id: 'current-user',
+      name: nickname,
+      avatar: generateAvatar(nickname),
+      isSynced: true,
+      isCurrentUser: true,
+      isHost: isHost,
+    };
+    
+    // Place current user at the top
+    return [currentUser, ...BASE_PARTICIPANTS];
+  }, [nickname, isHost]);
+
+  // Initialize - check for stored nickname
+  useEffect(() => {
+    const stored = getStoredNickname();
+    
+    if (stored) {
+      setNickname(stored);
+      setIsInitialized(true);
+    } else {
+      // Show modal if joining a session (has sessionId) or creating one
+      if (urlSessionId || sessionId) {
+        setShowNicknameModal(true);
+      }
+      setIsInitialized(true);
+    }
+  }, [urlSessionId, sessionId]);
+
+  // Handle nickname submission
+  const handleNicknameSubmit = useCallback((newNickname: string) => {
+    setStoredNickname(newNickname);
+    setNickname(newNickname);
+    setShowNicknameModal(false);
+    showToast(`Bienvenue ${newNickname} ! 🎵`, 'success');
+  }, [showToast]);
 
   // Generate session ID when creating new session
   const handleCreateSession = useCallback(() => {
     const newSessionId = generateSessionId();
     setSessionId(newSessionId);
-    setIsHost(true); // Creator is always the host
+    setIsHost(true);
     navigate(`/session/${newSessionId}`, { replace: true });
-    showToast('Session créée ! Partagez le lien avec vos amis.', 'success');
+    
+    // Check nickname after creating session
+    const stored = getStoredNickname();
+    if (!stored) {
+      setShowNicknameModal(true);
+    } else {
+      setNickname(stored);
+      showToast('Session créée ! Partagez le lien avec vos amis.', 'success');
+    }
   }, [navigate, showToast]);
 
   // Get shareable session URL
@@ -178,8 +381,6 @@ export const SessionPage: React.FC = () => {
       await navigator.clipboard.writeText(sessionUrl);
       setLinkCopied(true);
       showToast('Lien copié dans le presse-papier !', 'success');
-      
-      // Reset copied state after 3 seconds
       setTimeout(() => setLinkCopied(false), 3000);
     } catch (error) {
       showToast('Erreur lors de la copie', 'error');
@@ -206,9 +407,32 @@ export const SessionPage: React.FC = () => {
     showToast(`Piste sélectionnée: ${track.title}`, 'success');
   }, [showToast, isHost]);
 
+  // Change nickname
+  const handleChangeNickname = useCallback(() => {
+    setShowNicknameModal(true);
+  }, []);
+
   // Show create session view if no sessionId and is potential host
   if (!sessionId && !urlSessionId) {
     return <CreateSessionView onCreateSession={handleCreateSession} theme={theme} />;
+  }
+
+  // Show loading while initializing
+  if (!isInitialized) {
+    return (
+      <div 
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: '#000000' }}
+      >
+        <div className="flex items-center gap-3 text-white/60">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span>Chargement...</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -219,6 +443,14 @@ export const SessionPage: React.FC = () => {
         fontFamily: "'Inter', sans-serif",
       }}
     >
+      {/* Nickname Modal */}
+      <NicknameModal
+        isOpen={showNicknameModal}
+        isHost={isHost}
+        onSubmit={handleNicknameSubmit}
+        theme={theme}
+      />
+
       {/* Background Effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div 
@@ -233,7 +465,7 @@ export const SessionPage: React.FC = () => {
 
       {/* Header */}
       <header 
-        className="sticky top-0 z-50 border-b border-white/10"
+        className="sticky top-0 z-40 border-b border-white/10"
         style={{ 
           background: 'rgba(0, 0, 0, 0.8)',
           backdropFilter: 'blur(20px)',
@@ -276,6 +508,21 @@ export const SessionPage: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-3">
+              {/* User nickname display */}
+              {nickname && (
+                <button
+                  onClick={handleChangeNickname}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                >
+                  <div 
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium text-white"
+                    style={{ background: theme.colors.gradient.primary }}
+                  >
+                    {generateAvatar(nickname)}
+                  </div>
+                  <span className="text-white/70 text-sm hidden sm:block">{nickname}</span>
+                </button>
+              )}
               <Link to="/">
                 <Button variant="outline" size="sm" className="border-white/20 text-white/70 hover:bg-white/10">
                   ← Retour
@@ -483,15 +730,36 @@ export const SessionPage: React.FC = () => {
                   {participants.map((participant) => (
                     <div 
                       key={participant.id}
-                      className="flex items-center gap-3 p-2 rounded-lg bg-white/5"
+                      className={`flex items-center gap-3 p-2 rounded-lg ${
+                        participant.isCurrentUser 
+                          ? 'bg-[#8A2EFF]/10 border border-[#8A2EFF]/30' 
+                          : 'bg-white/5'
+                      }`}
                     >
                       <div 
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white"
-                        style={{ background: 'linear-gradient(135deg, #8A2EFF 0%, #FF2FB3 100%)' }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white relative"
+                        style={{ 
+                          background: participant.isCurrentUser 
+                            ? theme.colors.gradient.primary 
+                            : 'linear-gradient(135deg, #666 0%, #444 100%)' 
+                        }}
                       >
                         {participant.avatar}
+                        {participant.isHost && (
+                          <span className="absolute -top-1 -right-1 text-xs">👑</span>
+                        )}
                       </div>
-                      <span className="text-white text-sm flex-1">{participant.name}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-white text-sm truncate block">
+                          {participant.name}
+                          {participant.isCurrentUser && (
+                            <span className="text-[#8A2EFF] ml-1">(Vous)</span>
+                          )}
+                        </span>
+                        {participant.isHost && !participant.isCurrentUser && (
+                          <span className="text-yellow-400 text-xs">Hôte</span>
+                        )}
+                      </div>
                       <div 
                         className={`w-2 h-2 rounded-full ${
                           participant.isSynced ? 'bg-green-400' : 'bg-yellow-400'
