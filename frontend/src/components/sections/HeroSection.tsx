@@ -1,0 +1,245 @@
+import React, { useMemo } from "react";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { useTheme } from "@/context/ThemeContext";
+
+// Interface for particle configuration
+interface Particle {
+  id: number;
+  color: string;
+  opacity: number;
+  left: string;
+  top: string;
+  duration: number;
+  delay: number;
+}
+
+export const HeroSection: React.FC = () => {
+  const { theme } = useTheme();
+  const { name, slogan, description, badge, colors, fonts, buttons, stats, scrollIndicator } = theme;
+
+  // Generate particles with memoization to prevent re-renders
+  const particles = useMemo<Particle[]>(() => {
+    return Array.from({ length: 20 }, (_, i) => ({
+      id: i,
+      color: i % 2 === 0 ? colors.primary : colors.secondary,
+      opacity: Math.random() * 0.5 + 0.2,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      duration: 3 + Math.random() * 4,
+      delay: Math.random() * 2,
+    }));
+  }, [colors.primary, colors.secondary]);
+
+  return (
+    <section 
+      className="relative min-h-screen flex items-center justify-center overflow-hidden"
+      style={{ 
+        background: colors.background,
+        fontFamily: fonts.body,
+      }}
+    >
+      {/* Background Glow Effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Primary violet glow - top left */}
+        <div 
+          className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 rounded-full opacity-30 blur-3xl"
+          style={{
+            background: `radial-gradient(circle, ${colors.primary} 0%, transparent 70%)`,
+          }}
+        />
+        {/* Secondary rose glow - bottom right */}
+        <div 
+          className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 rounded-full opacity-25 blur-3xl"
+          style={{
+            background: `radial-gradient(circle, ${colors.secondary} 0%, transparent 70%)`,
+          }}
+        />
+        {/* Center subtle glow behind title */}
+        <div 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl h-64 rounded-full opacity-20 blur-3xl"
+          style={{
+            background: `radial-gradient(ellipse, ${colors.primary} 0%, ${colors.secondary} 50%, transparent 80%)`,
+          }}
+        />
+      </div>
+
+      {/* Animated particles/rhythm dots */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {particles.map((particle) => (
+          <div
+            key={particle.id}
+            className="absolute w-1 h-1 rounded-full"
+            style={{
+              background: particle.color,
+              opacity: particle.opacity,
+              left: particle.left,
+              top: particle.top,
+              animation: `bt-float ${particle.duration}s ease-in-out infinite`,
+              animationDelay: `${particle.delay}s`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Main Content */}
+      <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        {/* Badge - Dynamic from theme */}
+        <div 
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 opacity-0"
+          style={{
+            background: `rgba(138, 46, 255, 0.15)`,
+            border: `1px solid rgba(138, 46, 255, 0.3)`,
+            animation: "bt-fade-in 0.6s ease-out 0.2s forwards",
+          }}
+        >
+          <span 
+            className="w-2 h-2 rounded-full"
+            style={{ background: colors.primary }}
+          />
+          <span 
+            className="text-sm text-white/80"
+            style={{ fontFamily: fonts.body }}
+          >
+            {badge}
+          </span>
+        </div>
+
+        {/* Main Title with Gradient and Glow - Dynamic from theme */}
+        <div className="relative mb-6">
+          {/* Glow layer behind title */}
+          <h1 
+            className="absolute inset-0 text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight blur-2xl opacity-50 select-none"
+            style={{
+              fontFamily: fonts.heading,
+              background: colors.gradient.primary,
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+            aria-hidden="true"
+          >
+            {name}
+          </h1>
+          {/* Main visible title */}
+          <h1 
+            className="relative text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight opacity-0"
+            style={{
+              fontFamily: fonts.heading,
+              background: colors.gradient.primary,
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              animation: "bt-fade-in 0.8s ease-out 0.4s forwards",
+            }}
+          >
+            {name}
+          </h1>
+        </div>
+
+        {/* Slogan - Dynamic from theme */}
+        <p 
+          className="text-xl sm:text-2xl md:text-3xl font-medium mb-4 opacity-0"
+          style={{
+            fontFamily: fonts.heading,
+            color: colors.text.secondary,
+            animation: "bt-fade-in 0.8s ease-out 0.6s forwards",
+          }}
+        >
+          {slogan}
+        </p>
+
+        {/* Description - Dynamic from theme */}
+        <p 
+          className="text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed opacity-0"
+          style={{
+            fontFamily: fonts.body,
+            color: colors.text.muted,
+            animation: "bt-fade-in 0.8s ease-out 0.8s forwards",
+          }}
+        >
+          {description}
+        </p>
+
+        {/* CTA Buttons - Dynamic from theme */}
+        <div 
+          className="flex flex-col sm:flex-row items-center justify-center gap-4 opacity-0"
+          style={{
+            animation: "bt-fade-in 0.8s ease-out 1s forwards",
+          }}
+        >
+          <PrimaryButton size="lg">
+            {buttons.joinTribe}
+          </PrimaryButton>
+          <PrimaryButton variant="outline" size="lg">
+            {buttons.exploreBeats}
+          </PrimaryButton>
+        </div>
+
+        {/* Stats - Dynamic from theme */}
+        <div 
+          className="grid grid-cols-3 gap-8 mt-16 pt-8 border-t border-white/10 max-w-lg mx-auto opacity-0"
+          style={{
+            animation: "bt-fade-in 0.8s ease-out 1.2s forwards",
+          }}
+        >
+          {stats.map((stat, index) => (
+            <div key={index} className="text-center">
+              <p 
+                className="text-2xl sm:text-3xl font-bold"
+                style={{
+                  fontFamily: fonts.heading,
+                  background: colors.gradient.primary,
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                {stat.value}
+              </p>
+              <p 
+                className="text-xs sm:text-sm mt-1"
+                style={{
+                  fontFamily: fonts.body,
+                  color: colors.text.muted,
+                }}
+              >
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Scroll indicator - Dynamic from theme */}
+      <div 
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-0"
+        style={{
+          animation: "bt-fade-in 0.8s ease-out 1.4s forwards",
+        }}
+      >
+        <span 
+          className="text-xs uppercase tracking-widest"
+          style={{
+            fontFamily: fonts.body,
+            color: "rgba(255, 255, 255, 0.4)",
+          }}
+        >
+          {scrollIndicator}
+        </span>
+        <div 
+          className="w-6 h-10 rounded-full border border-white/20 flex justify-center pt-2"
+        >
+          <div 
+            className="w-1 h-2 rounded-full"
+            style={{
+              background: `linear-gradient(180deg, ${colors.primary}, ${colors.secondary})`,
+              animation: "bt-float 1.5s ease-in-out infinite",
+            }}
+          />
+        </div>
+      </div>
+    </section>
+  );
+};
+
+export default HeroSection;
