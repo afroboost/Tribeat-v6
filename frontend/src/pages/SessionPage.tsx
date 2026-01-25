@@ -819,7 +819,7 @@ export const SessionPage: React.FC = () => {
                   <PlaylistDnD
                     tracks={tracks}
                     selectedTrack={selectedTrack}
-                    onTrackSelect={handleTrackSelect}
+                    onTrackSelect={handleTrackSelectWithSync}
                     onReorder={handlePlaylistReorder}
                     isHost={isHost}
                     maxTracks={10}
