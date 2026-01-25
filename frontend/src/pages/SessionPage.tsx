@@ -588,6 +588,16 @@ export const SessionPage: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-3">
+              {/* Host Mic Control */}
+              {isHost && (
+                <HostMicControl
+                  gain={hostMicGain}
+                  isMuted={hostMicMuted}
+                  onGainChange={setHostMicGain}
+                  onMuteToggle={() => setHostMicMuted(!hostMicMuted)}
+                />
+              )}
+              
               {/* User nickname display */}
               {nickname && (
                 <button
