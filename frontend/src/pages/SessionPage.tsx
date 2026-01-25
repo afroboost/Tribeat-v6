@@ -363,7 +363,7 @@ export const SessionPage: React.FC = () => {
 
   // Build participants list with current user
   const participants = useMemo<Participant[]>(() => {
-    if (!nickname) return BASE_PARTICIPANTS;
+    if (!nickname) return participantsState;
     
     const currentUser: Participant = {
       id: 'current-user',
@@ -372,11 +372,38 @@ export const SessionPage: React.FC = () => {
       isSynced: true,
       isCurrentUser: true,
       isHost: isHost,
+      volume: 100,
+      isMuted: false,
     };
     
     // Place current user at the top
-    return [currentUser, ...BASE_PARTICIPANTS];
-  }, [nickname, isHost]);
+    return [currentUser, ...participantsState];
+  }, [nickname, isHost, participantsState]);
+
+  // Participant moderation handlers
+  const handleParticipantVolumeChange = useCallback((id: string, volume: number) => {
+    setParticipantsState(prev => 
+      prev.map(p => p.id === id ? { ...p, volume, isMuted: volume === 0 } : p)
+    );
+  }, []);
+
+  const handleParticipantMuteToggle = useCallback((id: string) => {
+    setParticipantsState(prev =>
+      prev.map(p => p.id === id ? { ...p, isMuted: !p.isMuted } : p)
+    );
+  }, []);
+
+  const handleParticipantEject = useCallback((id: string) => {
+    const participant = participantsState.find(p => p.id === id);
+    setParticipantsState(prev => prev.filter(p => p.id !== id));
+    showToast(`${participant?.name || 'Participant'} a été éjecté`, 'success');
+  }, [participantsState, showToast]);
+
+  // Playlist reorder handler
+  const handlePlaylistReorder = useCallback((newTracks: Track[]) => {
+    setTracks(newTracks);
+    showToast('Playlist réorganisée', 'success');
+  }, [showToast]);
 
   // Initialize - check for stored nickname
   useEffect(() => {
