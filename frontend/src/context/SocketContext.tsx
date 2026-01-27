@@ -182,16 +182,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       timestamp: Date.now(),
     };
 
-    console.log('[REALTIME OUT]', type, { target: targetUserId });
+    if (isDev) {
+      console.log('[REALTIME OUT]', type);
+    }
 
     // Send via Supabase Realtime (primary method)
     if (supabaseChannelRef.current) {
       broadcastToSession(supabaseChannelRef.current, payload);
-    } else if (!isSupabaseConfigured) {
-      // Local mode - log but don't send (no network available)
-      console.log('[LOCAL MODE] Command logged:', type, payload);
     }
-  }, [userId]);
+  }, [userId, isDev]);
 
   // Join session
   const joinSession = useCallback((newSessionId: string, newUserId: string, isHost: boolean) => {
@@ -212,22 +211,22 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         supabaseChannelRef.current = createSessionChannel(newSessionId, handleMessage);
         setConnectionStatus('connected');
         setIsConnected(true);
-        console.log('[REALTIME] Connected via Supabase Realtime');
+        if (isDev) console.log('[REALTIME] Connected via Supabase');
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Connexion Supabase échouée';
         setConnectionStatus('error');
         setConnectionError(errorMsg);
-        console.error('[REALTIME] Supabase connection error:', err);
+        console.error('[REALTIME] Connection error:', err);
       }
     } else {
-      // Local mode - no real-time sync available
+      // Local demo mode
       setConnectionStatus('connected');
       setIsConnected(true);
-      setConnectionError('Mode Local - Backend non connecté. Ajoutez REACT_APP_SUPABASE_URL et REACT_APP_SUPABASE_ANON_KEY dans .env');
-      console.log('[REALTIME] Local mode - no Supabase credentials');
+      setConnectionError('Mode Démo actif');
+      if (isDev) console.log('[REALTIME] Demo mode');
     }
 
-    console.log('[REALTIME]', `Joined session ${newSessionId} as ${isHost ? 'HOST' : 'PARTICIPANT'}`);
+    if (isDev) console.log('[SESSION]', isHost ? 'HOST' : 'PARTICIPANT');
     
     // Announce joining (only if Supabase is connected)
     if (isSupabaseConfigured) {
