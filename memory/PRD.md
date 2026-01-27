@@ -3,96 +3,86 @@
 ## Vision
 **"Unite Through Rhythm"** - Application d'écoute musicale synchronisée en temps réel.
 
-## Stack Technique
-- **Frontend**: React 18 + TypeScript + Tailwind CSS
-- **Build**: Create React App (CRA) avec CRACO
-- **UI Components**: Shadcn/UI + Radix UI
-- **Drag & Drop**: @dnd-kit/core + @dnd-kit/sortable
-- **Real-time**: Supabase Realtime Channels ✅ CONNECTÉ
-- **Storage**: Supabase Storage (bucket: audio-tracks)
-- **Routing**: react-router-dom v6
+## État Actuel - Supabase Connecté
 
-## État Actuel - PRODUCTION READY
+### ✅ Corrections appliquées (27 Jan 2026)
+- **Bug "body stream already read"** : CORRIGÉ - Utilisation de `fetch` direct au lieu du SDK
+- **Messages d'erreur dynamiques** : Affichage de l'erreur exacte Supabase
+- **Instructions RLS** : Affichées automatiquement en console si erreur 404/403
 
-### ✅ Supabase Connecté (27 Jan 2026)
-```
-URL: https://tfghpbgbtpgrjlhomlvz.supabase.co
-Status: SUBSCRIBED
-Realtime: WebSocket actif
-```
+## Configuration Supabase Storage
 
-### Fonctionnalités Actives
+### ⚠️ Action requise : Créer le bucket
 
-| Fonctionnalité | Status | Notes |
-|----------------|--------|-------|
-| Session création | ✅ | ID unique généré |
-| Realtime sync | ✅ | WebSocket SUBSCRIBED |
-| CMD_MUTE | ✅ | Diffusé sur réseau |
-| CMD_EJECT | ✅ | Diffusé sur réseau |
-| Upload MP3 | ✅ | Vers bucket audio-tracks |
-| Badge Cloud | ✅ | "✓ Cloud" affiché |
+1. **Allez sur** : https://supabase.com/dashboard/project/tfghpbgbtpgrjlhomlvz/storage
 
-## Configuration Supabase Appliquée
+2. **Créez le bucket** :
+   - Cliquez "New Bucket"
+   - Name: `audio-tracks`
+   - Public: ✅ OUI
+   - File size limit: 50MB
 
-```env
-REACT_APP_SUPABASE_URL=https://tfghpbgbtpgrjlhomlvz.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=sb_publishable_***
-REACT_APP_SUPABASE_BUCKET=audio-tracks
-```
+3. **Ajoutez les policies** (SQL Editor) :
 
-## Architecture Realtime
+```sql
+-- Autoriser les uploads anonymes
+CREATE POLICY "Allow public uploads"
+ON storage.objects FOR INSERT
+TO anon
+WITH CHECK (bucket_id = 'audio-tracks');
 
-```
-SocketContext.tsx
-└── supabase.channel(`session:${sessionId}`)
-    └── broadcast: { self: false }
-    └── Events:
-        ├── CMD_MUTE_USER    → Host → Participant
-        ├── CMD_UNMUTE_USER  → Host → Participant
-        ├── CMD_EJECT_USER   → Host → Participant (+ redirect)
-        ├── CMD_VOLUME_CHANGE → Host → Participant
-        ├── SYNC_PLAYLIST    → Host → All
-        ├── SYNC_PLAYBACK    → Host → All
-        ├── USER_JOINED      → Any → All
-        └── USER_LEFT        → Any → All
+-- Autoriser la lecture publique
+CREATE POLICY "Allow public read"
+ON storage.objects FOR SELECT
+TO anon
+USING (bucket_id = 'audio-tracks');
+
+-- Autoriser la suppression (optionnel)
+CREATE POLICY "Allow public delete"
+ON storage.objects FOR DELETE
+TO anon
+USING (bucket_id = 'audio-tracks');
 ```
 
-## Test Multi-Appareils
+## Architecture Upload (Corrigée)
 
-### Comment tester :
-1. **PC (Hôte)** : Ouvrir `https://beattribe-live.preview.emergentagent.com/session`
-2. **Téléphone (Participant)** : Ouvrir le lien de partage généré
-3. **Actions à tester** :
-   - Mute un participant → Vérifier que son audio est coupé
-   - Eject un participant → Vérifier redirection vers accueil
-   - Réorganiser playlist → Vérifier sync sur téléphone
+```javascript
+// supabaseClient.ts - Utilise fetch direct
+const response = await fetch(uploadUrl, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${supabaseAnonKey}`,
+    'apikey': supabaseAnonKey,
+    'Content-Type': file.type,
+  },
+  body: file,
+});
 
-### URLs de test :
-- **Preview**: https://beattribe-live.preview.emergentagent.com
-- **Session directe**: /session (créer) ou /session/{ID} (rejoindre)
+// Une seule lecture du stream
+const responseText = await response.text();
+```
 
-## Bucket Supabase Storage
+## Messages d'erreur dynamiques
 
-⚠️ **Action requise** : Vérifiez que le bucket `audio-tracks` existe :
-1. Allez sur https://supabase.com/dashboard/project/tfghpbgbtpgrjlhomlvz/storage
-2. Créez le bucket si absent :
-   - Nom: `audio-tracks`
-   - Public: OUI
-   - MIME types: audio/mpeg, audio/mp3
+| Status | Message affiché |
+|--------|-----------------|
+| 404 | "Bucket introuvable. Créez-le dans Supabase Dashboard." |
+| 403 | "Permission refusée. Activez l'accès public dans les policies." |
+| 413 | "Fichier trop volumineux." |
+| Autre | Message exact de Supabase |
+
+## Checklist Corrigée
+
+- [x] Une seule lecture du stream de réponse
+- [x] Ajout du titre à la playlist locale après succès
+- [x] Logs clairs sur le statut du bucket
+- [x] Build réussi sans erreurs
+- [ ] Test upload réel (en attente de création du bucket)
 
 ## Credentials
+- **Supabase URL**: https://tfghpbgbtpgrjlhomlvz.supabase.co
+- **Bucket**: audio-tracks (à créer)
 - **Admin**: `/admin` → MDP: `BEATTRIBE2026`
-- **Supabase Project**: tfghpbgbtpgrjlhomlvz
-
-## Tâches Futures
-
-### P1
-- [ ] Vérifier bucket Storage dans Supabase Dashboard
-- [ ] Test upload MP3 réel
-
-### P2
-- [ ] Persistance playlist en DB
-- [ ] Authentification réelle
 
 ---
-*Dernière mise à jour: 27 Jan 2026 - Supabase CONNECTÉ et FONCTIONNEL*
+*Dernière mise à jour: 27 Jan 2026 - Bug upload corrigé*
