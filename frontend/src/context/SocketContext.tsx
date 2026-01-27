@@ -18,6 +18,10 @@ import {
 // Re-export types for consumers
 export type { RealtimeEventType, RealtimePayload };
 
+// Connection status types
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type ConnectionMode = 'supabase' | 'local' | 'none';
+
 export interface PlaylistPayload {
   tracks: Array<{
     id: number;
