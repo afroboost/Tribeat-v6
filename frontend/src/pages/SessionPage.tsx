@@ -43,55 +43,6 @@ const DEMO_TRACKS: Track[] = [
     src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
     coverArt: '',
   },
-  {
-    id: 4,
-    title: 'Night Drive',
-    artist: 'Synthwave Heroes',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
-    coverArt: '',
-  },
-  {
-    id: 5,
-    title: 'Electric Dreams',
-    artist: 'Neon Lights',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
-    coverArt: '',
-  },
-  {
-    id: 6,
-    title: 'Bass Drop',
-    artist: 'Low Frequency',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',
-    coverArt: '',
-  },
-  {
-    id: 7,
-    title: 'Chill Zone',
-    artist: 'Ambient Masters',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3',
-    coverArt: '',
-  },
-  {
-    id: 8,
-    title: 'Funk It Up',
-    artist: 'Groove Station',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
-    coverArt: '',
-  },
-  {
-    id: 9,
-    title: 'Deep House',
-    artist: 'Underground Collective',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3',
-    coverArt: '',
-  },
-  {
-    id: 10,
-    title: 'Tribal Beats',
-    artist: 'World Fusion',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3',
-    coverArt: '',
-  },
 ];
 
 // Base mock participants (will be augmented with current user)
