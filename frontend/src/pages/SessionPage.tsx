@@ -936,6 +936,18 @@ export const SessionPage: React.FC = () => {
                     {socket.isSupabaseMode ? 'Supabase' : 'Local'}
                   </Badge>
                 </div>
+                
+                {/* Connection error message */}
+                {socket.connectionError && !socket.isSupabaseMode && (
+                  <div className="pt-3 mt-3 border-t border-white/10">
+                    <div className="flex items-start gap-2 p-2 rounded-md bg-yellow-500/10 border border-yellow-500/20">
+                      <span className="text-yellow-400 text-sm">⚠️</span>
+                      <p className="text-yellow-400/80 text-xs leading-relaxed">
+                        Mode Local - Backend non connecté. La synchronisation multi-appareils n'est pas disponible.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
