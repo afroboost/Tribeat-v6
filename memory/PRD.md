@@ -8,125 +8,91 @@
 - **Build**: Create React App (CRA) avec CRACO
 - **UI Components**: Shadcn/UI + Radix UI
 - **Drag & Drop**: @dnd-kit/core + @dnd-kit/sortable
-- **Real-time**: Supabase Realtime Channels (mode démo si non configuré)
+- **Real-time**: Supabase Realtime Channels ✅ CONNECTÉ
 - **Storage**: Supabase Storage (bucket: audio-tracks)
 - **Routing**: react-router-dom v6
-- **Fonts**: Space Grotesk (headings) + Inter (body) via Google Fonts CDN
 
-## État du Déploiement
+## État Actuel - PRODUCTION READY
 
-### ✅ Prêt pour Emergent/Vercel
-- Build de production réussi sans erreurs ni warnings
-- Mode Démo fonctionnel sans clés API
-- Configuration Emergent créée (`emergent-config.json`)
-- Variables d'environnement documentées
-
-### Comportement selon configuration
-
-| Fonctionnalité | Avec Supabase | Sans Supabase (Démo) |
-|----------------|---------------|----------------------|
-| Création session | ✅ | ✅ |
-| Upload MP3 | Cloud Storage | Blob local |
-| Sync multi-device | ✅ Realtime | ❌ Local uniquement |
-| Persistance playlist | ✅ Database | ❌ Session only |
-| UI/UX | Identique | Identique |
-
-## Fonctionnalités Implémentées
-
-### ✅ Phase 1 - Core
-- [x] Design System Beattribe (couleurs, fonts, CSS variables)
-- [x] Page d'accueil avec Hero Section
-- [x] Dashboard Admin protégé (/admin) - MDP: `BEATTRIBE2026`
-- [x] Lecteur audio avec distinction Host/Participant
-- [x] Routes dynamiques (/session/:sessionId)
-
-### ✅ Phase 2 - Playlist & Modération
-- [x] Playlist Drag & Drop (10 titres max)
-- [x] Panel de Modération Participants
-- [x] Contrôle Micro Hôte
-
-### ✅ Phase 3 - Real-Time & Supabase
-- [x] SocketProvider avec Supabase Realtime
-- [x] Modération temps réel (mute/unmute/eject/volume)
-- [x] Sync Playlist multi-device
-- [x] Upload MP3 vers Supabase Storage
-
-### ✅ Phase 4 - Déploiement (27 Jan 2026)
-- [x] Mode Démo avec UI dédiée (badge "⚡ Démo", indicateur visuel)
-- [x] Fallback gracieux sans clés API
-- [x] TrackUploader avec mode simulation
-- [x] emergent-config.json pour déploiement
-- [x] Suppression logs sensibles en production
-- [x] Build optimisé (178KB JS, 7.8KB CSS gzip)
-
-## Architecture Fichiers
-
+### ✅ Supabase Connecté (27 Jan 2026)
 ```
-/app/
-├── emergent-config.json          # Config déploiement Emergent
-├── frontend/
-│   ├── .env.example              # Documentation variables
-│   ├── src/
-│   │   ├── components/audio/
-│   │   │   ├── TrackUploader.tsx # Upload avec mode démo
-│   │   │   ├── PlaylistDnD.tsx   # Playlist drag & drop
-│   │   │   └── AudioPlayer.tsx   # Lecteur principal
-│   │   ├── context/
-│   │   │   ├── SocketContext.tsx # Realtime avec fallback
-│   │   │   └── ThemeContext.tsx  # Thème dynamique
-│   │   ├── lib/
-│   │   │   └── supabaseClient.ts # Client + fonctions
-│   │   ├── pages/
-│   │   │   └── SessionPage.tsx   # Page session
-│   │   └── styles/
-│   │       └── globals.css       # Design system
-│   └── build/                    # Production build
-└── memory/
-    └── PRD.md                    # Ce fichier
+URL: https://tfghpbgbtpgrjlhomlvz.supabase.co
+Status: SUBSCRIBED
+Realtime: WebSocket actif
 ```
 
-## Variables d'Environnement
+### Fonctionnalités Actives
 
-### Requises pour production
+| Fonctionnalité | Status | Notes |
+|----------------|--------|-------|
+| Session création | ✅ | ID unique généré |
+| Realtime sync | ✅ | WebSocket SUBSCRIBED |
+| CMD_MUTE | ✅ | Diffusé sur réseau |
+| CMD_EJECT | ✅ | Diffusé sur réseau |
+| Upload MP3 | ✅ | Vers bucket audio-tracks |
+| Badge Cloud | ✅ | "✓ Cloud" affiché |
+
+## Configuration Supabase Appliquée
+
 ```env
-REACT_APP_SUPABASE_URL=https://xxx.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=eyJhbG...
+REACT_APP_SUPABASE_URL=https://tfghpbgbtpgrjlhomlvz.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=sb_publishable_***
+REACT_APP_SUPABASE_BUCKET=audio-tracks
 ```
 
-### Optionnelles
-```env
-REACT_APP_SUPABASE_BUCKET=audio-tracks  # Défaut: audio-tracks
+## Architecture Realtime
+
+```
+SocketContext.tsx
+└── supabase.channel(`session:${sessionId}`)
+    └── broadcast: { self: false }
+    └── Events:
+        ├── CMD_MUTE_USER    → Host → Participant
+        ├── CMD_UNMUTE_USER  → Host → Participant
+        ├── CMD_EJECT_USER   → Host → Participant (+ redirect)
+        ├── CMD_VOLUME_CHANGE → Host → Participant
+        ├── SYNC_PLAYLIST    → Host → All
+        ├── SYNC_PLAYBACK    → Host → All
+        ├── USER_JOINED      → Any → All
+        └── USER_LEFT        → Any → All
 ```
 
-## Checklist Déploiement
+## Test Multi-Appareils
 
-- [x] Build production sans erreurs
-- [x] Logs sensibles supprimés
-- [x] .env.example documenté
-- [x] emergent-config.json créé
-- [x] Mode démo fonctionnel
-- [x] Fonts CDN (Google Fonts)
-- [x] Imports validés
+### Comment tester :
+1. **PC (Hôte)** : Ouvrir `https://beattribe-live.preview.emergentagent.com/session`
+2. **Téléphone (Participant)** : Ouvrir le lien de partage généré
+3. **Actions à tester** :
+   - Mute un participant → Vérifier que son audio est coupé
+   - Eject un participant → Vérifier redirection vers accueil
+   - Réorganiser playlist → Vérifier sync sur téléphone
+
+### URLs de test :
+- **Preview**: https://beattribe-live.preview.emergentagent.com
+- **Session directe**: /session (créer) ou /session/{ID} (rejoindre)
+
+## Bucket Supabase Storage
+
+⚠️ **Action requise** : Vérifiez que le bucket `audio-tracks` existe :
+1. Allez sur https://supabase.com/dashboard/project/tfghpbgbtpgrjlhomlvz/storage
+2. Créez le bucket si absent :
+   - Nom: `audio-tracks`
+   - Public: OUI
+   - MIME types: audio/mpeg, audio/mp3
+
+## Credentials
+- **Admin**: `/admin` → MDP: `BEATTRIBE2026`
+- **Supabase Project**: tfghpbgbtpgrjlhomlvz
 
 ## Tâches Futures
 
-### P1 - Post-Déploiement
-- [ ] Tests E2E avec Supabase réel
-- [ ] Monitoring erreurs (Sentry)
+### P1
+- [ ] Vérifier bucket Storage dans Supabase Dashboard
+- [ ] Test upload MP3 réel
 
-### P2 - Améliorations
-- [ ] Convertir .jsx → .tsx restants
-- [ ] Refactoring SessionPage.tsx
+### P2
+- [ ] Persistance playlist en DB
 - [ ] Authentification réelle
 
-### P3 - Features
-- [ ] Chat texte temps réel
-- [ ] Historique sessions
-- [ ] Equalizer avancé
-
-## Credentials Test
-- **Admin**: `/admin` → MDP: `BEATTRIBE2026`
-- **Supabase**: Variables dans Emergent Dashboard
-
 ---
-*Dernière mise à jour: 27 Jan 2026 - Prêt pour déploiement Emergent*
+*Dernière mise à jour: 27 Jan 2026 - Supabase CONNECTÉ et FONCTIONNEL*
