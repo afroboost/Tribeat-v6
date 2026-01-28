@@ -250,11 +250,12 @@ export const TrackUploader: React.FC<TrackUploaderProps> = ({
               <span className="text-sm text-white/50">
                 {canUpload 
                   ? 'Cliquez pour ajouter un MP3' 
-                  : `Limite atteinte (${maxTracks} titres max)`
+                  : `Limite atteinte (${effectiveMaxTracks} titres max)`
                 }
               </span>
               <span className="text-xs text-white/30">
-                {currentTrackCount}/{maxTracks} titres • Max 50 Mo
+                {currentTrackCount}/{effectiveMaxTracks} titres • Max 50 Mo
+                {isAdmin && ' • Admin'}
               </span>
             </>
           )}
