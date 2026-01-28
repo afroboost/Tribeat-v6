@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import supabase from "@/lib/supabaseClient";
+import supabase, { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { 
   Settings, 
   CreditCard, 
@@ -19,22 +19,24 @@ import {
   Save,
   RefreshCw,
   ExternalLink,
-  Crown,
   Zap,
   Building2,
   ArrowLeft,
   Eye,
   Check,
-  X
+  X,
+  Image,
+  AlertTriangle
 } from "lucide-react";
 
-// Site settings interface
+// Site settings interface - matches Supabase table
 interface SiteSettings {
   id?: string;
   site_name: string;
   site_slogan: string;
   site_description: string;
   site_badge: string;
+  favicon_url: string;
   color_primary: string;
   color_secondary: string;
   color_background: string;
@@ -57,6 +59,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
   site_slogan: 'Unite Through Rhythm',
   site_description: 'Rejoignez la communauté des beatmakers et producteurs.',
   site_badge: 'La communauté des créateurs',
+  favicon_url: '',
   color_primary: '#8A2EFF',
   color_secondary: '#FF2FB3',
   color_background: '#000000',
@@ -73,9 +76,6 @@ const DEFAULT_SETTINGS: SiteSettings = {
   stripe_enterprise_yearly: '',
 };
 
-// LocalStorage key for fallback
-const SITE_SETTINGS_KEY = 'bt_site_settings';
-
 // Color validation
 const isValidHex = (color: string): boolean => /^#([A-Fa-f0-9]{6})$/.test(color);
 
@@ -87,10 +87,11 @@ interface EditableFieldProps {
   placeholder?: string;
   isColor?: boolean;
   icon?: React.ReactNode;
+  hint?: string;
 }
 
 const EditableField: React.FC<EditableFieldProps> = ({ 
-  label, value, onChange, placeholder, isColor, icon 
+  label, value, onChange, placeholder, isColor, icon, hint
 }) => {
   const [localValue, setLocalValue] = useState(value);
   const isValid = !isColor || isValidHex(localValue);
@@ -127,6 +128,7 @@ const EditableField: React.FC<EditableFieldProps> = ({
           }`}
         />
       </div>
+      {hint && <p className="text-white/40 text-xs">{hint}</p>}
       {isColor && !isValid && (
         <p className="text-red-400 text-xs">Format invalide. Utilisez #RRGGBB</p>
       )}
@@ -147,71 +149,82 @@ const Dashboard: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [activeTab, setActiveTab] = useState<'identity' | 'colors' | 'buttons' | 'stripe'>('identity');
-  const [useSupabase, setUseSupabase] = useState(false);
+  const [dbStatus, setDbStatus] = useState<'connected' | 'error' | 'checking'>('checking');
+  const [dbError, setDbError] = useState<string | null>(null);
 
   // ADMIN BYPASS: Check email directly for instant access
   const userEmail = user?.email?.toLowerCase() || '';
   const isAdminByEmail = userEmail === 'contact.artboost@gmail.com';
   const hasAdminAccess = isAdminByEmail || isAdmin;
 
-  // Redirect if not admin (with bypass for admin email)
+  // Redirect if not admin
   useEffect(() => {
-    // Skip redirect if loading or if admin by email
     if (authLoading && !isAdminByEmail) return;
-    
     if (!hasAdminAccess && !authLoading) {
-      console.log('[ADMIN] Access denied, redirecting...');
+      console.log('[CMS] Access denied, redirecting...');
       showToast('Accès refusé - Admin uniquement', 'error');
       navigate('/');
     }
   }, [hasAdminAccess, authLoading, navigate, showToast, isAdminByEmail]);
 
-  // Load settings from Supabase or localStorage
+  // Update favicon in document head
+  useEffect(() => {
+    if (settings.favicon_url) {
+      let link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = settings.favicon_url;
+      console.log('[CMS] Favicon updated:', settings.favicon_url);
+    }
+  }, [settings.favicon_url]);
+
+  // Load settings from Supabase ONLY
   useEffect(() => {
     const loadSettings = async () => {
-      console.log('[ADMIN] Loading site settings...');
+      console.log('[CMS] Loading site settings from Supabase...');
+      setDbStatus('checking');
       
-      // Try Supabase first
-      if (supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('site_settings')
-            .select('*')
-            .limit(1)
-            .single();
-          
-          if (!error && data) {
-            console.log('[ADMIN] ✅ Settings loaded from Supabase');
-            setSettings(data as SiteSettings);
-            setOriginalSettings(data as SiteSettings);
-            setUseSupabase(true);
-            setIsLoadingSettings(false);
-            return;
-          }
-          
-          console.log('[ADMIN] Supabase table not available, using localStorage');
-        } catch (err) {
-          console.warn('[ADMIN] Supabase error:', err);
-        }
+      if (!isSupabaseConfigured || !supabase) {
+        console.warn('[CMS] Supabase not configured');
+        setDbStatus('error');
+        setDbError('Supabase non configuré. Exécutez supabase-site-settings.sql');
+        setIsLoadingSettings(false);
+        return;
       }
-      
-      // Fallback to localStorage
+
       try {
-        const stored = localStorage.getItem(SITE_SETTINGS_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored) as SiteSettings;
-          setSettings(parsed);
-          setOriginalSettings(parsed);
-          console.log('[ADMIN] Settings loaded from localStorage');
+        const { data, error } = await supabase
+          .from('site_settings')
+          .select('*')
+          .limit(1)
+          .single();
+        
+        if (error) {
+          console.error('[CMS] Supabase error:', error.message);
+          setDbStatus('error');
+          setDbError(`Erreur DB: ${error.message}. Exécutez supabase-site-settings.sql`);
+          // Use defaults on error
+          setSettings(DEFAULT_SETTINGS);
+          setOriginalSettings(DEFAULT_SETTINGS);
+        } else if (data) {
+          console.log('[CMS] ✅ Settings loaded from Supabase:', data.site_name);
+          setSettings(data as SiteSettings);
+          setOriginalSettings(data as SiteSettings);
+          setDbStatus('connected');
+          setDbError(null);
         }
       } catch (err) {
-        console.warn('[ADMIN] localStorage error:', err);
+        console.error('[CMS] Exception:', err);
+        setDbStatus('error');
+        setDbError('Exception lors du chargement');
       }
       
       setIsLoadingSettings(false);
     };
 
-    // Only load if admin
     if (hasAdminAccess || isAdminByEmail) {
       loadSettings();
     }
@@ -223,36 +236,76 @@ const Dashboard: React.FC = () => {
     setHasChanges(true);
   }, []);
 
-  // Save settings
+  // Save settings to Supabase
   const handleSave = useCallback(async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      showToast('Supabase non configuré', 'error');
+      return;
+    }
+
     setIsSaving(true);
     
     try {
-      const updatedSettings = {
-        ...settings,
-        updated_at: new Date().toISOString(),
+      // Prepare update data (exclude id and timestamps)
+      const updateData = {
+        site_name: settings.site_name,
+        site_slogan: settings.site_slogan,
+        site_description: settings.site_description,
+        site_badge: settings.site_badge,
+        favicon_url: settings.favicon_url,
+        color_primary: settings.color_primary,
+        color_secondary: settings.color_secondary,
+        color_background: settings.color_background,
+        btn_login: settings.btn_login,
+        btn_start: settings.btn_start,
+        btn_join: settings.btn_join,
+        btn_explore: settings.btn_explore,
+        stat_creators: settings.stat_creators,
+        stat_beats: settings.stat_beats,
+        stat_countries: settings.stat_countries,
+        stripe_pro_monthly: settings.stripe_pro_monthly,
+        stripe_pro_yearly: settings.stripe_pro_yearly,
+        stripe_enterprise_monthly: settings.stripe_enterprise_monthly,
+        stripe_enterprise_yearly: settings.stripe_enterprise_yearly,
+        updated_by: user?.id,
       };
+
+      let result;
       
-      // Try Supabase first
-      if (useSupabase && supabase && settings.id) {
-        const { error } = await supabase
+      if (settings.id) {
+        // Update existing
+        result = await supabase
           .from('site_settings')
-          .update(updatedSettings)
-          .eq('id', settings.id);
-        
-        if (error) {
-          console.error('[ADMIN] Supabase save error:', error);
-          throw error;
-        }
-        
-        console.log('[ADMIN] ✅ Settings saved to Supabase');
+          .update(updateData)
+          .eq('id', settings.id)
+          .select()
+          .single();
       } else {
-        // Fallback to localStorage
-        localStorage.setItem(SITE_SETTINGS_KEY, JSON.stringify(updatedSettings));
-        console.log('[ADMIN] ✅ Settings saved to localStorage');
+        // Insert new (shouldn't happen normally)
+        result = await supabase
+          .from('site_settings')
+          .insert(updateData)
+          .select()
+          .single();
       }
+
+      if (result.error) {
+        console.error('[CMS] Save error:', result.error);
+        showToast(`Erreur: ${result.error.message}`, 'error');
+        setIsSaving(false);
+        return;
+      }
+
+      console.log('[CMS] ✅ Settings saved to Supabase');
       
-      // Also update theme context for live preview
+      // Update local state
+      const savedData = result.data as SiteSettings;
+      setSettings(savedData);
+      setOriginalSettings(savedData);
+      setHasChanges(false);
+      setDbStatus('connected');
+      
+      // Update theme context for live preview
       updateConfig({
         name: settings.site_name,
         slogan: settings.site_slogan,
@@ -279,16 +332,14 @@ const Dashboard: React.FC = () => {
         ],
       });
       
-      setOriginalSettings(updatedSettings);
-      setHasChanges(false);
-      showToast('Configuration sauvegardée !', 'success');
+      showToast('✅ Configuration sauvegardée dans Supabase !', 'success');
     } catch (err) {
-      console.error('[ADMIN] Save error:', err);
+      console.error('[CMS] Save exception:', err);
       showToast('Erreur lors de la sauvegarde', 'error');
     }
     
     setIsSaving(false);
-  }, [settings, useSupabase, updateConfig, showToast]);
+  }, [settings, user?.id, updateConfig, showToast]);
 
   // Reset to original
   const handleReset = useCallback(() => {
@@ -300,13 +351,13 @@ const Dashboard: React.FC = () => {
   // Reset to defaults
   const handleResetDefaults = useCallback(() => {
     if (window.confirm('Réinitialiser tous les paramètres par défaut ?')) {
-      setSettings(DEFAULT_SETTINGS);
+      setSettings({ ...DEFAULT_SETTINGS, id: settings.id });
       setHasChanges(true);
-      showToast('Paramètres réinitialisés', 'warning');
+      showToast('Paramètres réinitialisés (sauvegardez pour appliquer)', 'warning');
     }
-  }, [showToast]);
+  }, [settings.id, showToast]);
 
-  // Show loading while checking auth (but bypass for admin email)
+  // Show loading
   if ((authLoading || isLoadingSettings) && !isAdminByEmail) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
@@ -318,14 +369,11 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  // Access denied (should redirect, but fallback)
-  if (!hasAdminAccess && !isAdminByEmail) {
-    return null;
-  }
+  if (!hasAdminAccess && !isAdminByEmail) return null;
 
   return (
     <div className="min-h-screen" style={{ background: '#0a0a0f' }}>
-      {/* Admin Header */}
+      {/* Header */}
       <header 
         className="sticky top-0 z-50 border-b border-white/10"
         style={{ background: "rgba(0, 0, 0, 0.9)", backdropFilter: "blur(20px)" }}
@@ -356,15 +404,21 @@ const Dashboard: React.FC = () => {
               </Link>
               <Separator orientation="vertical" className="h-6 bg-white/20" />
               <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
-                ⚙️ Gestion du Site
+                ⚙️ CMS Admin
               </Badge>
-              {useSupabase ? (
+              
+              {/* DB Status */}
+              {dbStatus === 'connected' ? (
                 <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                   <Check size={12} className="mr-1" /> Supabase
                 </Badge>
+              ) : dbStatus === 'error' ? (
+                <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
+                  <AlertTriangle size={12} className="mr-1" /> Erreur DB
+                </Badge>
               ) : (
                 <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-                  💾 LocalStorage
+                  <RefreshCw size={12} className="mr-1 animate-spin" /> Connexion...
                 </Badge>
               )}
             </div>
@@ -394,6 +448,20 @@ const Dashboard: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* DB Error Alert */}
+        {dbError && (
+          <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30 flex items-start gap-3">
+            <AlertTriangle className="text-red-400 flex-shrink-0 mt-0.5" size={20} />
+            <div>
+              <p className="text-red-400 font-medium">Configuration Supabase requise</p>
+              <p className="text-red-400/70 text-sm mt-1">{dbError}</p>
+              <p className="text-white/50 text-xs mt-2">
+                Exécutez le fichier <code className="text-purple-400">/app/frontend/supabase-site-settings.sql</code> dans votre Supabase SQL Editor.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Page Title */}
         <div className="flex items-start justify-between mb-8">
           <div>
@@ -401,7 +469,7 @@ const Dashboard: React.FC = () => {
               👑 Gestion du Site (CMS)
             </h1>
             <p className="text-white/60">
-              Modifiez l'identité, les couleurs et les textes de votre site en temps réel.
+              Modifiez l'identité, les couleurs et les textes. Sauvegarde dans Supabase.
             </p>
           </div>
           <div className="flex gap-3">
@@ -424,7 +492,11 @@ const Dashboard: React.FC = () => {
                 Annuler
               </Button>
             )}
-            <PrimaryButton onClick={handleSave} disabled={!hasChanges || isSaving} size="sm">
+            <PrimaryButton 
+              onClick={handleSave} 
+              disabled={!hasChanges || isSaving || dbStatus === 'error'} 
+              size="sm"
+            >
               {isSaving ? (
                 <RefreshCw size={14} className="mr-2 animate-spin" />
               ) : (
@@ -443,9 +515,13 @@ const Dashboard: React.FC = () => {
                 className="w-16 h-16 rounded-xl flex items-center justify-center"
                 style={{ background: `linear-gradient(135deg, ${settings.color_primary} 0%, ${settings.color_secondary} 100%)` }}
               >
-                <svg viewBox="0 0 24 24" className="w-8 h-8 text-white" fill="currentColor">
-                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-                </svg>
+                {settings.favicon_url ? (
+                  <img src={settings.favicon_url} alt="Favicon" className="w-8 h-8" onError={(e) => e.currentTarget.style.display = 'none'} />
+                ) : (
+                  <svg viewBox="0 0 24 24" className="w-8 h-8 text-white" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                  </svg>
+                )}
               </div>
               <div className="flex-1">
                 <h2 
@@ -509,7 +585,7 @@ const Dashboard: React.FC = () => {
                 Identité du Site
               </CardTitle>
               <CardDescription className="text-white/50">
-                Nom, slogan et description de votre plateforme
+                Nom, slogan, description et favicon de votre plateforme
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -539,6 +615,30 @@ const Dashboard: React.FC = () => {
                 onChange={(v) => handleUpdate('site_badge', v)}
                 placeholder="La communauté des créateurs"
               />
+              <Separator className="my-4 bg-white/10" />
+              <EditableField
+                label="URL du Favicon"
+                value={settings.favicon_url}
+                onChange={(v) => handleUpdate('favicon_url', v)}
+                placeholder="https://example.com/favicon.ico"
+                icon={<Image size={14} />}
+                hint="URL directe vers une image .ico, .png ou .svg (32x32 ou 64x64 recommandé)"
+              />
+              {settings.favicon_url && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10">
+                  <span className="text-white/50 text-sm">Aperçu :</span>
+                  <img 
+                    src={settings.favicon_url} 
+                    alt="Favicon preview" 
+                    className="w-8 h-8"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                    }}
+                  />
+                  <span className="hidden text-red-400 text-xs">Image non chargée</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -557,14 +657,14 @@ const Dashboard: React.FC = () => {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <EditableField
-                  label="Couleur Primaire (Violet)"
+                  label="Couleur Primaire"
                   value={settings.color_primary}
                   onChange={(v) => handleUpdate('color_primary', v)}
                   placeholder="#8A2EFF"
                   isColor
                 />
                 <EditableField
-                  label="Couleur Secondaire (Rose)"
+                  label="Couleur Secondaire"
                   value={settings.color_secondary}
                   onChange={(v) => handleUpdate('color_secondary', v)}
                   placeholder="#FF2FB3"
@@ -598,61 +698,26 @@ const Dashboard: React.FC = () => {
                 Boutons & Statistiques
               </CardTitle>
               <CardDescription className="text-white/50">
-                Textes des boutons et statistiques affichées sur la home
+                Textes des boutons et statistiques affichées
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
                 <h4 className="text-white font-medium mb-4">Labels des boutons</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <EditableField
-                    label="Login"
-                    value={settings.btn_login}
-                    onChange={(v) => handleUpdate('btn_login', v)}
-                    placeholder="Connexion"
-                  />
-                  <EditableField
-                    label="Commencer"
-                    value={settings.btn_start}
-                    onChange={(v) => handleUpdate('btn_start', v)}
-                    placeholder="Commencer"
-                  />
-                  <EditableField
-                    label="Rejoindre"
-                    value={settings.btn_join}
-                    onChange={(v) => handleUpdate('btn_join', v)}
-                    placeholder="Rejoindre la tribu"
-                  />
-                  <EditableField
-                    label="Explorer"
-                    value={settings.btn_explore}
-                    onChange={(v) => handleUpdate('btn_explore', v)}
-                    placeholder="Explorer les beats"
-                  />
+                  <EditableField label="Login" value={settings.btn_login} onChange={(v) => handleUpdate('btn_login', v)} placeholder="Connexion" />
+                  <EditableField label="Commencer" value={settings.btn_start} onChange={(v) => handleUpdate('btn_start', v)} placeholder="Commencer" />
+                  <EditableField label="Rejoindre" value={settings.btn_join} onChange={(v) => handleUpdate('btn_join', v)} placeholder="Rejoindre la tribu" />
+                  <EditableField label="Explorer" value={settings.btn_explore} onChange={(v) => handleUpdate('btn_explore', v)} placeholder="Explorer les beats" />
                 </div>
               </div>
               <Separator className="bg-white/10" />
               <div>
                 <h4 className="text-white font-medium mb-4">Statistiques Hero</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <EditableField
-                    label="Créateurs"
-                    value={settings.stat_creators}
-                    onChange={(v) => handleUpdate('stat_creators', v)}
-                    placeholder="50K+"
-                  />
-                  <EditableField
-                    label="Beats partagés"
-                    value={settings.stat_beats}
-                    onChange={(v) => handleUpdate('stat_beats', v)}
-                    placeholder="1M+"
-                  />
-                  <EditableField
-                    label="Pays"
-                    value={settings.stat_countries}
-                    onChange={(v) => handleUpdate('stat_countries', v)}
-                    placeholder="120+"
-                  />
+                  <EditableField label="Créateurs" value={settings.stat_creators} onChange={(v) => handleUpdate('stat_creators', v)} placeholder="50K+" />
+                  <EditableField label="Beats partagés" value={settings.stat_beats} onChange={(v) => handleUpdate('stat_beats', v)} placeholder="1M+" />
+                  <EditableField label="Pays" value={settings.stat_countries} onChange={(v) => handleUpdate('stat_countries', v)} placeholder="120+" />
                 </div>
               </div>
             </CardContent>
@@ -667,7 +732,7 @@ const Dashboard: React.FC = () => {
                 Liens de Paiement Stripe
               </CardTitle>
               <CardDescription className="text-white/50">
-                Configurez vos liens Stripe Payment Links pour chaque plan
+                Configurez vos liens Stripe Payment Links
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -763,9 +828,9 @@ const Dashboard: React.FC = () => {
         {/* Footer */}
         <div className="mt-8 pt-6 border-t border-white/10 text-center">
           <p className="text-white/40 text-sm">
-            {useSupabase 
+            {dbStatus === 'connected' 
               ? '✅ Données synchronisées avec Supabase (table: site_settings)'
-              : '💾 Données stockées en local (localStorage: bt_site_settings)'
+              : '⚠️ Mode hors ligne - Configurez Supabase pour la persistance'
             }
           </p>
           {settings.updated_at && (
