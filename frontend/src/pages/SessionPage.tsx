@@ -431,11 +431,28 @@ export const SessionPage: React.FC = () => {
       const newSelected = payload.tracks.find(t => t.id === payload.selectedTrackId);
       if (newSelected) {
         setSelectedTrack(newSelected as Track);
+        showToast(`Piste suivante : ${(newSelected as Track).title}`, 'info');
       }
     });
     
     return unsubPlaylist;
-  }, [socket, isHost]);
+  }, [socket, isHost, showToast]);
+
+  // Listen for playback sync (for participants to auto-play new tracks)
+  useEffect(() => {
+    if (isHost) return;
+    
+    const unsubPlayback = socket.onPlaybackSync((payload) => {
+      console.log('[SOCKET] Received playback sync:', payload);
+      // Find and select the track
+      const targetTrack = tracks.find(t => t.id === payload.trackId);
+      if (targetTrack) {
+        setSelectedTrack(targetTrack);
+      }
+    });
+    
+    return unsubPlayback;
+  }, [socket, isHost, tracks]);
 
   // Build participants list with current user
   const participants = useMemo<Participant[]>(() => {
