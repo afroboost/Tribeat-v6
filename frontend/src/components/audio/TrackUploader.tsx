@@ -62,17 +62,24 @@ export const TrackUploader: React.FC<TrackUploaderProps> = ({
     setProgress(0);
     setError(null);
 
-    // Simulate progress for UX
+    // Progress simulation for UX
     const progressInterval = setInterval(() => {
-      setProgress(prev => Math.min(prev + 10, 90));
-    }, 200);
+      setProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return 90;
+        }
+        return prev + 15;
+      });
+    }, 300);
 
     try {
       let result: UploadResult;
 
       if (isSupabaseConfigured) {
         // Real Supabase upload
-        result = await uploadAudioFile(selectedFile, sessionId, setProgress);
+        console.log('[TRACK UPLOADER] Démarrage upload Supabase...');
+        result = await uploadAudioFile(selectedFile, sessionId);
       } else {
         // Demo mode - local file simulation
         await new Promise(resolve => setTimeout(resolve, 1200));
@@ -87,8 +94,7 @@ export const TrackUploader: React.FC<TrackUploaderProps> = ({
 
       if (result.success && result.url) {
         setProgress(100);
-        setStatus('success');
-
+        
         // Extract title from filename
         const title = selectedFile.name
           .replace(/\.[^/.]+$/, '')
@@ -99,14 +105,19 @@ export const TrackUploader: React.FC<TrackUploaderProps> = ({
         const newTrack: Track = {
           id: Date.now(),
           title: title || 'Sans titre',
-          artist: isDemoMode ? 'Mode Démo' : 'Upload utilisateur',
+          artist: isDemoMode ? 'Mode Démo' : 'Upload',
           src: result.url,
         };
 
-        // Callback to parent
-        onTrackUploaded(newTrack);
+        console.log('[TRACK UPLOADER] ✅ Ajout à la playlist:', newTrack.title);
 
-        // Reset after success
+        // Short delay to show 100% before success state
+        setTimeout(() => {
+          setStatus('success');
+          onTrackUploaded(newTrack);
+        }, 300);
+
+        // Reset after success animation
         setTimeout(() => {
           setStatus('idle');
           setSelectedFile(null);
@@ -114,13 +125,15 @@ export const TrackUploader: React.FC<TrackUploaderProps> = ({
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
-        }, 2000);
+        }, 2500);
       } else {
+        setProgress(0);
         setStatus('error');
         setError(result.error || 'Erreur lors de l\'upload');
       }
     } catch (err) {
       clearInterval(progressInterval);
+      setProgress(0);
       setStatus('error');
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     }
