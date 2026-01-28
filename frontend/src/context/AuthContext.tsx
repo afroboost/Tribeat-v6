@@ -182,12 +182,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: { message: 'Supabase non configuré' } as AuthError };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    return { error };
+      if (error) {
+        console.error('[AUTH] Sign in error:', error.message);
+        return { error };
+      }
+
+      console.log('[AUTH] Sign in successful:', data.user?.email);
+      return { error: null };
+    } catch (err) {
+      console.error('[AUTH] Sign in exception:', err);
+      return { 
+        error: { 
+          message: err instanceof Error ? err.message : 'Erreur de connexion' 
+        } as AuthError 
+      };
+    }
   }, []);
 
   // Sign up with email
@@ -196,17 +211,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: { message: 'Supabase non configuré' } as AuthError };
     }
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName || email.split('@')[0],
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName || email.split('@')[0],
+          },
         },
-      },
-    });
+      });
 
-    return { error };
+      if (error) {
+        console.error('[AUTH] Sign up error:', error.message);
+        return { error };
+      }
+
+      console.log('[AUTH] Sign up successful:', data.user?.email);
+      return { error: null };
+    } catch (err) {
+      console.error('[AUTH] Sign up exception:', err);
+      return { 
+        error: { 
+          message: err instanceof Error ? err.message : 'Erreur d\'inscription' 
+        } as AuthError 
+      };
+    }
   }, []);
 
   // Sign in with Google
@@ -215,14 +245,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: { message: 'Supabase non configuré' } as AuthError };
     }
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/session`,
-      },
-    });
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/session`,
+        },
+      });
 
-    return { error };
+      if (error) {
+        console.error('[AUTH] Google sign in error:', error.message);
+        // Specific message for unsupported provider
+        if (error.message.includes('unsupported') || error.message.includes('provider')) {
+          return { 
+            error: { 
+              message: 'Google Auth non activé. Activez-le dans Supabase Dashboard > Authentication > Providers > Google' 
+            } as AuthError 
+          };
+        }
+        return { error };
+      }
+
+      return { error: null };
+    } catch (err) {
+      console.error('[AUTH] Google sign in exception:', err);
+      return { 
+        error: { 
+          message: 'Erreur de connexion Google' 
+        } as AuthError 
+      };
+    }
   }, []);
 
   // Sign out
