@@ -14,6 +14,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useSocket } from '@/context/SocketContext';
 import { useToast } from '@/components/ui/Toast';
 import { generateSessionId } from '@/hooks/useAudioSync';
+import { usePeerAudio } from '@/hooks/usePeerAudio';
 import type { AudioState, SyncState, RepeatMode } from '@/hooks/useAudioSync';
 import { isSupabaseConfigured } from '@/lib/supabaseClient';
 
