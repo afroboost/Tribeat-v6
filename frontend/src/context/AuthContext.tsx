@@ -393,7 +393,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const userProfile = await fetchProfile(session.user.id);
+        const userProfile = await fetchProfile(
+          session.user.id, 
+          session.user.email || '', 
+          session.user.user_metadata
+        );
         setProfile(userProfile);
         
         // Set admin flag in sessionStorage if user is admin
@@ -407,14 +411,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[AUTH] Auth state changed:', event);
+      console.log('[AUTH] Auth state changed:', event, session?.user?.email);
       
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const userProfile = await fetchProfile(session.user.id);
+        const userProfile = await fetchProfile(
+          session.user.id, 
+          session.user.email || '', 
+          session.user.user_metadata
+        );
         setProfile(userProfile);
+        
+        console.log('[AUTH] Profile loaded:', {
+          email: session.user.email,
+          role: userProfile?.role,
+          isAdmin: userProfile?.role === 'admin'
+        });
         
         if (userProfile?.role === 'admin') {
           sessionStorage.setItem('bt_is_admin', 'true');
