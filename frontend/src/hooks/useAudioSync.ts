@@ -115,6 +115,7 @@ export function useAudioSync(options: AudioSyncOptions = {}): UseAudioSyncReturn
     onStateChange, 
     onSyncUpdate,
     onBroadcast,
+    onTrackEnded,
   } = options;
   
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -128,6 +129,19 @@ export function useAudioSync(options: AudioSyncOptions = {}): UseAudioSyncReturn
     isHost,
     sessionId,
   });
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
+
+  // Cycle through repeat modes: none -> all -> one -> none
+  const cycleRepeatMode = useCallback(() => {
+    setRepeatMode(prev => {
+      switch (prev) {
+        case 'none': return 'all';
+        case 'all': return 'one';
+        case 'one': return 'none';
+        default: return 'none';
+      }
+    });
+  }, []);
 
   // Update audio state and notify
   const updateAudioState = useCallback((updates: Partial<AudioState>) => {
