@@ -20,6 +20,8 @@ interface AudioPlayerProps {
   sessionId?: string | null;
   onStateChange?: (state: AudioState) => void;
   onSyncUpdate?: (syncState: SyncState) => void;
+  onTrackEnded?: () => void;
+  onRepeatModeChange?: (mode: RepeatMode) => void;
   className?: string;
 }
 
