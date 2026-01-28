@@ -63,7 +63,7 @@ function getOrCreateRemoteAudioElement(): HTMLAudioElement {
     audioEl = document.createElement('audio');
     audioEl.id = REMOTE_AUDIO_ID;
     audioEl.autoplay = true;        // Auto-play when stream is attached
-    audioEl.playsInline = true;     // Required for iOS
+    audioEl.setAttribute('playsinline', 'true'); // Required for iOS
     audioEl.controls = false;       // Hidden
     audioEl.volume = 1.0;           // Full volume for voice
     audioEl.style.display = 'none'; // Hidden element
