@@ -3,103 +3,83 @@
 ## Vision
 **"Unite Through Rhythm"** - Application d'écoute musicale synchronisée en temps réel.
 
-## État Actuel - Autoplay & Sync Complets
+## État Actuel - Autoplay 100% Fonctionnel
 
-### ✅ Fonctionnalités Autoplay (28 Jan 2026)
+### ✅ Enchaînement Automatique (28 Jan 2026)
 
-#### Enchaînement Automatique
-- À la fin d'une piste, passage automatique au titre suivant
-- Toast de feedback : "Piste suivante : [Titre]"
-- Synchronisation avec tous les participants via Supabase
+#### Comportement Hôte
+1. À la fin d'une piste, `handleTrackEnded` est appelé
+2. Calcul du prochain index : `(currentIndex + 1) % tracks.length`
+3. Mise à jour locale + `autoPlayPending` pour forcer la lecture
+4. Broadcast `syncPlaylist` + `syncPlayback` vers les participants
+5. Toast "Enchaînement : [Titre]"
 
-#### Modes de Répétition
-| Mode | Comportement |
-|------|--------------|
-| none | Passe au suivant, s'arrête en fin de playlist |
-| all | Boucle sur toute la playlist |
-| one | Répète le titre en cours indéfiniment |
+#### Comportement Participant
+1. Réception de `SYNC_PLAYBACK` via Supabase Realtime
+2. Changement de piste via `setSelectedTrack`
+3. Force `audio.play()` via `document.querySelector('audio')`
+4. Toast "Enchaînement : [Titre]"
 
-#### Broadcast Multi-Appareils
-```typescript
-// Hôte envoie aux participants
-socket.syncPlaylist(tracks, nextTrack.id);  // Mise à jour playlist
-socket.syncPlayback(true, 0, nextTrack.id); // Commande lecture
-```
+### Modes de Répétition
+
+| Mode | Fin de piste | Fin de playlist |
+|------|--------------|-----------------|
+| none | → Suivant | ⏹ Toast "Fin de la playlist" |
+| all | → Suivant | 🔄 Retour au premier |
+| one | 🔂 Rejoue | 🔂 Rejoue |
 
 ### Architecture Technique
 
 ```typescript
-// useAudioSync.ts - Gestion de fin de piste
+// SessionPage.tsx - Force auto-play après changement
+const [autoPlayPending, setAutoPlayPending] = useState<string | null>(null);
+
 useEffect(() => {
-  const handleEnded = () => {
-    if (repeatMode === 'one') {
-      audio.currentTime = 0;
-      audio.play();
-    } else {
-      onTrackEnded?.(); // Parent gère le changement
-    }
-  };
-  audio.addEventListener('ended', handleEnded);
-  return () => audio.removeEventListener('ended', handleEnded);
-}, [repeatMode, onTrackEnded]);
-
-// SessionPage.tsx - Logique autoplay
-const handleTrackEnded = useCallback(() => {
-  if (!isHost) return;
-  
-  const currentIndex = tracks.findIndex(t => t.id === selectedTrack.id);
-  let nextTrack = null;
-  
-  if (repeatMode === 'all') {
-    nextTrack = tracks[(currentIndex + 1) % tracks.length];
-  } else if (repeatMode === 'none' && currentIndex < tracks.length - 1) {
-    nextTrack = tracks[currentIndex + 1];
+  if (autoPlayPending && selectedTrack.src === autoPlayPending) {
+    setTimeout(() => {
+      const audioEl = document.querySelector('audio');
+      audioEl?.play();
+      setAutoPlayPending(null);
+    }, 150);
   }
-  
-  if (nextTrack) {
-    setSelectedTrack(nextTrack);
-    showToast(`Piste suivante : ${nextTrack.title}`, 'success');
-    socket.syncPlaylist(tracks, nextTrack.id);
-    socket.syncPlayback(true, 0, nextTrack.id);
-  }
-}, [...]);
-```
+}, [autoPlayPending, selectedTrack.src]);
 
-### Écoute Participants
+// handleTrackEnded - Broadcast aux participants
+if (nextTrack) {
+  setSelectedTrack(nextTrack);
+  setAutoPlayPending(nextTrack.src);
+  socket.syncPlaylist(tracks, nextTrack.id);
+  socket.syncPlayback(true, 0, nextTrack.id);
+}
 
-```typescript
-// SessionPage.tsx - Réception sync playlist
-socket.onPlaylistSync((payload) => {
-  setTracks(payload.tracks);
-  const newSelected = payload.tracks.find(t => t.id === payload.selectedTrackId);
-  if (newSelected) {
-    setSelectedTrack(newSelected);
-    showToast(`Piste suivante : ${newSelected.title}`, 'default');
-  }
-});
-
-// Réception sync playback
+// Participant - Réception et auto-play
 socket.onPlaybackSync((payload) => {
   const targetTrack = tracks.find(t => t.id === payload.trackId);
-  if (targetTrack) setSelectedTrack(targetTrack);
+  if (targetTrack) {
+    setSelectedTrack(targetTrack);
+    setTimeout(() => {
+      document.querySelector('audio')?.play();
+    }, 100);
+  }
 });
 ```
 
 ### Checklist Anti-Casse
 
 - [x] **TrackUploader.tsx** : NON MODIFIÉ ✅
-- [x] **Styles minimalistes** : stroke-width 1.5 conservé ✅
-- [x] **Cleanup eventListeners** : `return () => removeEventListener` ✅
-- [x] **Index sécurisé** : `% tracks.length` évite dépassement ✅
-- [x] **Build réussi** : `npm run build` sans erreurs ✅
+- [x] **Config Supabase** : NON MODIFIÉ ✅
+- [x] **Styles** : Conservés ✅
+- [x] **Cleanup** : Event listeners nettoyés ✅
+- [x] **Playlist vide** : Gestion du cas ✅
+- [x] **Build réussi** : `yarn build` OK ✅
 
 ### Test de Régression
 
 - [x] Upload MP3 fonctionne
 - [x] Playlist drag & drop OK
-- [x] Modération (mute/eject) OK
-- [x] Répétition cycle OK (none → all → one)
-- [x] Toast affiché lors du changement de piste
+- [x] Modération OK
+- [x] Répétition OK
+- [x] Toast affiché
 
 ## Configuration
 
@@ -109,9 +89,15 @@ REACT_APP_SUPABASE_ANON_KEY=sb_publishable_***
 REACT_APP_SUPABASE_BUCKET=audio-tracks
 ```
 
+## Test Multi-Appareils
+
+1. **PC (Hôte)** : https://beattribe-live.preview.emergentagent.com/session
+2. **Mobile (Participant)** : Ouvrir le lien de partage
+3. **Lancer la lecture** sur PC
+4. **Laisser la piste finir** → Le mobile doit changer automatiquement
+
 ## Credentials
 - **Admin**: `/admin` → MDP: `BEATTRIBE2026`
-- **Preview**: https://beattribe-live.preview.emergentagent.com
 
 ---
-*Dernière mise à jour: 28 Jan 2026 - Autoplay multi-appareils complet*
+*Dernière mise à jour: 28 Jan 2026 - Autoplay multi-appareils 100% fonctionnel*
