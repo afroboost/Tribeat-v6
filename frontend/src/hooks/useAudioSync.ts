@@ -143,23 +143,25 @@ export function useAudioSync(options: AudioSyncOptions = {}): UseAudioSyncReturn
     });
   }, []);
 
-  // Update audio state and notify
+  // Update audio state
   const updateAudioState = useCallback((updates: Partial<AudioState>) => {
-    setAudioState(prev => {
-      const newState = { ...prev, ...updates };
-      onStateChange?.(newState);
-      return newState;
-    });
-  }, [onStateChange]);
+    setAudioState(prev => ({ ...prev, ...updates }));
+  }, []);
 
-  // Update sync state and notify
+  // Notify parent of audio state changes via effect (avoids setState during render)
+  useEffect(() => {
+    onStateChange?.(audioState);
+  }, [audioState, onStateChange]);
+
+  // Update sync state
   const updateSyncState = useCallback((updates: Partial<SyncState>) => {
-    setSyncState(prev => {
-      const newState = { ...prev, ...updates };
-      onSyncUpdate?.(newState);
-      return newState;
-    });
-  }, [onSyncUpdate]);
+    setSyncState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  // Notify parent of sync state changes via effect
+  useEffect(() => {
+    onSyncUpdate?.(syncState);
+  }, [syncState, onSyncUpdate]);
 
   // Get current timestamp with millisecond precision
   const getTimestamp = useCallback((): number => {
