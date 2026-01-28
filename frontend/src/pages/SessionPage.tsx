@@ -343,17 +343,24 @@ export const SessionPage: React.FC = () => {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   
   // Track if user created this session (host) or joined via URL (participant)
-  // ADMIN/SUBSCRIBER BYPASS: Always host mode for privileged users
-  const [isHost, setIsHost] = useState<boolean>(!urlSessionId || hasHostPrivileges);
+  // Initial state: true if creating session OR if user has privileges
+  const [isHost, setIsHost] = useState<boolean>(() => {
+    // If creating new session (no URL ID), always host
+    if (!urlSessionId) return true;
+    // Check sessionStorage for admin flag (set during auth)
+    const isAdminStored = sessionStorage.getItem('bt_is_admin') === 'true';
+    return isAdminStored;
+  });
   const [sessionId, setSessionId] = useState<string | null>(urlSessionId || null);
   
   // Force host mode for admin/subscribers when joining via URL
+  // This handles the case where auth loads after component mount
   useEffect(() => {
-    if (hasHostPrivileges && urlSessionId && !isHost) {
+    if (hasHostPrivileges && !isHost) {
       console.log('[SESSION] ⚡ ADMIN/SUBSCRIBER BYPASS - Forcing host mode');
       setIsHost(true);
     }
-  }, [hasHostPrivileges, urlSessionId, isHost]);
+  }, [hasHostPrivileges, isHost]);
   
   // Nickname state
   const [nickname, setNickname] = useState<string | null>(null);
