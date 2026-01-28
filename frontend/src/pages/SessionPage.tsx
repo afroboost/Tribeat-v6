@@ -349,7 +349,7 @@ export const SessionPage: React.FC = () => {
         console.log('[AUTOPLAY] Next track:', nextTrack.title);
       } else {
         console.log('[AUTOPLAY] Playlist ended');
-        showToast('Fin de la playlist', 'info');
+        showToast('Fin de la playlist', 'default');
         return;
       }
     }
