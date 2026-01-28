@@ -1,163 +1,128 @@
 # Beattribe - Product Requirements Document
 
-## Vision
-**"Unite Through Rhythm"** - Application d'écoute musicale synchronisée en temps réel.
+## Énoncé du problème original
+Créer "Beattribe", une application web pour des sessions d'écoute musicale synchronisée en temps réel. Un "Host" contrôle une playlist pour des "Participants" connectés.
 
-## État Actuel - AUTHENTIFICATION COMPLÈTE ✅
+## Exigences fonctionnelles
 
-### ✅ Implémentation Auth (28 Jan 2026)
+### 1. Fonctionnalités principales (Core Features)
+- Session d'écoute avec code de partage unique
+- Playlist drag-and-drop
+- Synchronisation en temps réel (Supabase Realtime)
+- Upload de fichiers MP3 vers Supabase Storage
+- Contrôle du volume par participant
 
-#### Architecture Auth Supabase
-```
-┌─────────────────────────────────────────────────┐
-│              AUTHENTIFICATION                   │
-│  • Email/Password                              │
-│  • Google OAuth                                │
-│  • Password Reset                              │
-│  • CGU obligatoires à l'inscription           │
-└─────────────────────────────────────────────────┘
-                      │
-┌─────────────────────────────────────────────────┐
-│              RÔLES & ABONNEMENTS               │
-│  • Admin : role='admin' dans table profiles    │
-│  • User : trial, monthly, yearly, enterprise   │
-│  • Accès illimité pour Admin (via DB)         │
-└─────────────────────────────────────────────────┘
-```
+### 2. Voice Chat (WebRTC)
+- Communication vocale Host → Participants via PeerJS
+- Ducking du volume musique pendant la parole
 
-### Fichiers Créés
+### 3. Monétisation (Stripe)
+- Plans: Free, Pro, Enterprise
+- Limites d'upload par plan
+- Admin bypass illimité
 
-| Fichier | Description |
-|---------|-------------|
-| `/context/AuthContext.tsx` | Gestion auth Supabase, profils, rôles |
-| `/pages/LoginPage.tsx` | Page connexion/inscription/reset |
-| `/components/auth/RequireAuth.tsx` | Guard de route authentifié |
+### 4. Authentification (Supabase Auth)
+- Email/Password
+- Google OAuth
+- Admin bypass pour `contact.artboost@gmail.com`
 
-### Fonctionnalités Auth
+### 5. Admin CMS
+- Gestion du nom, slogan, couleurs du site
+- Persistance via table `site_settings` (avec fallback defaults)
 
-#### 1. Page Login (/login)
-- Email + Mot de passe
-- Bouton "Se connecter avec Google"
-- Lien "Mot de passe oublié ?"
-- Toggle Login/Signup
-- Redirection vers page précédente après login
-
-#### 2. Page Signup
-- Nom complet
-- Email + Mot de passe (min 6 caractères)
-- **Checkbox CGU obligatoire** ✅
-- Confirmation email envoyée
-
-#### 3. Sécurisation Admin
-```sql
--- L'admin n'est plus défini par mot de passe hardcodé
--- Il est défini par son email dans la table profiles
-CREATE TABLE profiles (
-  id UUID PRIMARY KEY,
-  email TEXT,
-  role TEXT DEFAULT 'user', -- 'admin' pour les admins
-  subscription_status TEXT DEFAULT 'trial',
-  has_accepted_terms BOOLEAN DEFAULT FALSE
-);
-
--- Pour créer un admin :
-UPDATE profiles SET role = 'admin' WHERE email = 'votre@email.com';
-```
-
-#### 4. Navigation Protégée
-```typescript
-// Route protégée - redirige vers /login si non connecté
-<RequireAuth>
-  <SessionPage />
-</RequireAuth>
-
-// Admin bypass toutes les restrictions
-if (isAdmin) return true;
-```
-
-### UI Updates
-
-#### Header
-- **Non connecté** : Boutons "Connexion" + "Commencer"
-- **Connecté** : Avatar + Nom + Badge Admin + Bouton déconnexion
-- **"Communauté" supprimée** du menu ✅
-
-#### Page Pricing
-- **Toggle Mensuel/Annuel** avec badge "-17%"
-- **3 plans** : Essai Gratuit, Pro, Enterprise
-- Prix dynamiques selon période sélectionnée
-
-### Routes
-
-| Route | Protection | Description |
-|-------|------------|-------------|
-| `/` | Public | Page d'accueil |
-| `/login` | Public | Connexion/Inscription |
-| `/pricing` | Public | Tarifs |
-| `/session` | Auth Required | Créer une session |
-| `/session/:id` | Public | Rejoindre une session |
-| `/admin` | Password Protected | Dashboard admin |
-
-### Checklist ✅
-- [x] Login Email/Password
-- [x] Google OAuth
-- [x] Password Reset
-- [x] CGU à l'inscription
-- [x] Admin via DB (pas hardcodé)
-- [x] Redirection après login vers page précédente
-- [x] Toggle Mensuel/Annuel
-- [x] "Communauté" supprimé
-- [x] Build `yarn build` réussi
-- [x] WebRTC/Microphone NON MODIFIÉ ✅
-
-### Configuration Supabase Requise
-
-```sql
--- 1. Créer la table profiles
-CREATE TABLE profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id),
-  email TEXT,
-  full_name TEXT,
-  avatar_url TEXT,
-  role TEXT DEFAULT 'user',
-  subscription_status TEXT DEFAULT 'trial',
-  has_accepted_terms BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 2. Activer Google Auth dans Supabase Dashboard
--- Settings > Authentication > Providers > Google
-
--- 3. Créer un admin
-UPDATE profiles SET role = 'admin' WHERE email = 'admin@votredomaine.com';
-```
-
-## Credentials
-- **Admin Legacy**: `/admin` → MDP: `BEATTRIBE2026` (pour le dashboard admin)
-- **Admin Real**: Utilisateur avec `role='admin'` dans la table `profiles`
-
-## URLs
-- **Accueil**: `/`
-- **Login**: `/login`
-- **Tarifs**: `/pricing`
-- **Session**: `/session`
-- **Admin**: `/admin`
-
-## Tâches Restantes
-
-### P1 - Configuration Supabase
-- [ ] Créer table `profiles` dans Supabase
-- [ ] Activer Google Auth Provider
-- [ ] Créer l'utilisateur admin
-
-### P2 - Stripe
-- [ ] Créer Payment Links dans Stripe Dashboard
-- [ ] Webhook pour mettre à jour `subscription_status`
-
-### P3 - Backlog
-- [ ] Dashboard utilisateur (historique, factures)
-- [ ] Analytics abonnements
+### 6. PWA (Progressive Web App)
+- Installable sur PC/Mobile
+- Service Worker pour cache offline
+- manifest.json configuré
 
 ---
-*Dernière mise à jour: 28 Jan 2026 - Authentification Supabase complète*
+
+## Ce qui a été implémenté
+
+### Session 28 Janvier 2025
+
+#### ✅ P0 - Réparation Upload MP3
+- **Avant**: Erreur "Failed to execute 'json' on 'Response': body stream already read"
+- **Correction**: Remplacé `fetch` natif par SDK Supabase `supabase.storage.from().upload()`
+- **Fichier**: `/app/frontend/src/lib/supabaseClient.ts`
+- **Status**: TESTÉ ET FONCTIONNEL
+
+#### ✅ PWA - App installable
+- Créé `/app/frontend/public/manifest.json`
+- Créé `/app/frontend/public/sw.js` (Service Worker)
+- Créé icônes SVG (`icon-192.svg`, `icon-512.svg`)
+- Ajouté meta tags PWA dans `index.html`
+- Enregistrement Service Worker dans `App.tsx`
+- **Status**: TESTÉ ET FONCTIONNEL
+
+#### ✅ UI - Suppression "Explorer les beats"
+- Lien déjà supprimé de `HeroSection.tsx`
+- **Status**: VÉRIFIÉ
+
+#### ✅ CMS Fallback
+- Hook `useSiteSettings` utilise `maybeSingle()` avec try/catch
+- Valeurs par défaut si table absente
+- **Status**: TESTÉ ET FONCTIONNEL
+
+---
+
+## Architecture technique
+
+```
+/app/frontend/
+├── public/
+│   ├── index.html (+ meta PWA)
+│   ├── manifest.json ✅ NEW
+│   ├── sw.js ✅ NEW
+│   ├── icon-192.svg ✅ NEW
+│   └── icon-512.svg ✅ NEW
+├── src/
+│   ├── lib/supabaseClient.ts ✅ UPDATED (SDK upload)
+│   ├── components/
+│   │   ├── audio/TrackUploader.tsx
+│   │   └── sections/HeroSection.tsx
+│   ├── context/AuthContext.tsx
+│   ├── hooks/useSiteSettings.ts
+│   ├── pages/
+│   │   ├── SessionPage.tsx
+│   │   └── admin/Dashboard.tsx
+│   └── App.tsx ✅ UPDATED (SW registration)
+```
+
+---
+
+## Backlog / Tâches futures
+
+### P1 - Haute priorité
+- [ ] Convertir composants UI `.jsx` → `.tsx`
+- [ ] Confirmer exécution des scripts SQL Supabase (`supabase-setup.sql`, `supabase-site-settings.sql`)
+
+### P2 - Moyenne priorité
+- [ ] Implémenter "Request to Speak" pour participants
+- [ ] Gestion du pseudo du Host
+- [ ] Persister thème UI via Supabase au lieu de localStorage
+
+### P3 - Basse priorité
+- [ ] Refactoriser `SessionPage.tsx` (composant trop volumineux)
+- [ ] Convertir icônes PWA SVG → PNG pour meilleure compatibilité
+
+---
+
+## Intégrations tierces
+- **Supabase**: Auth, Realtime, Storage
+- **PeerJS**: WebRTC voice streaming
+- **@dnd-kit/core**: Drag-and-drop playlist
+- **Stripe**: Payment (frontend ready, backend pending)
+
+---
+
+## Credentials de test
+- **Admin**: `contact.artboost@gmail.com` (bypass automatique)
+- **URL Preview**: https://music-tribe-2.preview.emergentagent.com
+
+---
+
+## Notes importantes
+- ⚠️ NE PAS TOUCHER au flux WebRTC/micro (stable)
+- ⚠️ Utiliser EXCLUSIVEMENT le SDK Supabase pour Storage (pas de fetch natif)
+- ⚠️ Tables SQL doivent être créées par l'utilisateur dans Supabase Dashboard
