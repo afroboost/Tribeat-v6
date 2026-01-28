@@ -3,26 +3,25 @@
 ## Vision
 **"Unite Through Rhythm"** - Application d'écoute musicale synchronisée en temps réel.
 
-## État Actuel - SYSTÈME D'ABONNEMENT STRIPE ✅
+## État Actuel - AUTHENTIFICATION COMPLÈTE ✅
 
-### ✅ Implémentation Abonnement (28 Jan 2026)
+### ✅ Implémentation Auth (28 Jan 2026)
 
-#### Architecture Subscription
+#### Architecture Auth Supabase
 ```
 ┌─────────────────────────────────────────────────┐
-│                  ADMIN                          │
-│  • Accès illimité (pas de paiement)             │
-│  • Création sessions sans limite                │
-│  • Upload 999 chansons                          │
-│  • Badge "👑 Mode Admin"                        │
+│              AUTHENTIFICATION                   │
+│  • Email/Password                              │
+│  • Google OAuth                                │
+│  • Password Reset                              │
+│  • CGU obligatoires à l'inscription           │
 └─────────────────────────────────────────────────┘
                       │
 ┌─────────────────────────────────────────────────┐
-│             UTILISATEUR STANDARD                │
-│  • Version d'essai : 1 chanson max              │
-│  • Doit accepter CGU avant paiement             │
-│  • Redirection Stripe pour abonnement           │
-│  • Badge "🎵 Essai (1 titre)"                   │
+│              RÔLES & ABONNEMENTS               │
+│  • Admin : role='admin' dans table profiles    │
+│  • User : trial, monthly, yearly, enterprise   │
+│  • Accès illimité pour Admin (via DB)         │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -30,105 +29,135 @@
 
 | Fichier | Description |
 |---------|-------------|
-| `/context/SubscriptionContext.tsx` | Gestion état abonnement, rôle, CGU |
-| `/pages/PricingPage.tsx` | Page des offres avec checkbox CGU |
+| `/context/AuthContext.tsx` | Gestion auth Supabase, profils, rôles |
+| `/pages/LoginPage.tsx` | Page connexion/inscription/reset |
+| `/components/auth/RequireAuth.tsx` | Guard de route authentifié |
 
-### Plans Disponibles
+### Fonctionnalités Auth
 
-| Plan | Prix | Limite Chansons |
-|------|------|-----------------|
-| Essai Gratuit | 0€ | 1 |
-| Pro Mensuel | 9.99€/mois | 50 |
-| Pro Annuel | 99.99€/an | 200 |
-| Enterprise | 299.99€/an | Illimité |
+#### 1. Page Login (/login)
+- Email + Mot de passe
+- Bouton "Se connecter avec Google"
+- Lien "Mot de passe oublié ?"
+- Toggle Login/Signup
+- Redirection vers page précédente après login
 
-### Fonctionnalités Implémentées
+#### 2. Page Signup
+- Nom complet
+- Email + Mot de passe (min 6 caractères)
+- **Checkbox CGU obligatoire** ✅
+- Confirmation email envoyée
 
-#### 1. Contexte SubscriptionContext
+#### 3. Sécurisation Admin
+```sql
+-- L'admin n'est plus défini par mot de passe hardcodé
+-- Il est défini par son email dans la table profiles
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY,
+  email TEXT,
+  role TEXT DEFAULT 'user', -- 'admin' pour les admins
+  subscription_status TEXT DEFAULT 'trial',
+  has_accepted_terms BOOLEAN DEFAULT FALSE
+);
+
+-- Pour créer un admin :
+UPDATE profiles SET role = 'admin' WHERE email = 'votre@email.com';
+```
+
+#### 4. Navigation Protégée
 ```typescript
-const { isAdmin, canUploadTrack, trackLimit, acceptTerms } = useSubscription();
+// Route protégée - redirige vers /login si non connecté
+<RequireAuth>
+  <SessionPage />
+</RequireAuth>
 
-// Admin bypass toutes les limites
+// Admin bypass toutes les restrictions
 if (isAdmin) return true;
-
-// Vérification limite d'upload
-if (currentTrackCount >= trackLimit) {
-  return false; // Bloqué
-}
 ```
 
-#### 2. Page Pricing (/pricing)
-- Grille de 4 offres
-- Badge "Plus populaire" sur Pro Mensuel
-- Checkbox CGU obligatoire avant paiement
-- Modal CGU complet
+### UI Updates
 
-#### 3. Limitations TrackUploader
-```typescript
-{isTrialLimitReached && (
-  <div className="bg-yellow-500/10">
-    <Lock /> Limite de la version d'essai : 1 chanson max
-    <Link to="/pricing">Voir les offres</Link>
-  </div>
-)}
-```
+#### Header
+- **Non connecté** : Boutons "Connexion" + "Commencer"
+- **Connecté** : Avatar + Nom + Badge Admin + Bouton déconnexion
+- **"Communauté" supprimée** du menu ✅
 
-#### 4. Badges UI
-- Admin : "👑 Mode Admin" (violet)
-- Abonné : "✓ Abonné {type}" (vert)
-- Essai : "🎵 Essai (1 titre)" (jaune, cliquable → /pricing)
+#### Page Pricing
+- **Toggle Mensuel/Annuel** avec badge "-17%"
+- **3 plans** : Essai Gratuit, Pro, Enterprise
+- Prix dynamiques selon période sélectionnée
 
-### Logique Admin (Privilège Total)
-- `sessionStorage.bt_is_admin` stocké après connexion `/admin`
-- SubscriptionContext vérifie ce flag
-- Si admin → role='admin', subscription='enterprise', trackLimit=-1
+### Routes
+
+| Route | Protection | Description |
+|-------|------------|-------------|
+| `/` | Public | Page d'accueil |
+| `/login` | Public | Connexion/Inscription |
+| `/pricing` | Public | Tarifs |
+| `/session` | Auth Required | Créer une session |
+| `/session/:id` | Public | Rejoindre une session |
+| `/admin` | Password Protected | Dashboard admin |
 
 ### Checklist ✅
-- [x] Exception 'admin' dans le garde de route
-- [x] Checkbox CGU fonctionnelle
-- [x] Limitation playlist dynamique selon rôle
+- [x] Login Email/Password
+- [x] Google OAuth
+- [x] Password Reset
+- [x] CGU à l'inscription
+- [x] Admin via DB (pas hardcodé)
+- [x] Redirection après login vers page précédente
+- [x] Toggle Mensuel/Annuel
+- [x] "Communauté" supprimé
 - [x] Build `yarn build` réussi
 - [x] WebRTC/Microphone NON MODIFIÉ ✅
-- [x] Autoplay NON MODIFIÉ ✅
 
-## Configuration Stripe (À Faire)
+### Configuration Supabase Requise
 
-Pour activer les paiements :
-1. Créer les Payment Links dans Stripe Dashboard
-2. Ajouter dans Supabase `admin_config.stripe_links`:
-```json
-{
-  "monthly": "https://buy.stripe.com/xxx",
-  "yearly": "https://buy.stripe.com/yyy",
-  "enterprise": "https://buy.stripe.com/zzz"
-}
+```sql
+-- 1. Créer la table profiles
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id),
+  email TEXT,
+  full_name TEXT,
+  avatar_url TEXT,
+  role TEXT DEFAULT 'user',
+  subscription_status TEXT DEFAULT 'trial',
+  has_accepted_terms BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Activer Google Auth dans Supabase Dashboard
+-- Settings > Authentication > Providers > Google
+
+-- 3. Créer un admin
+UPDATE profiles SET role = 'admin' WHERE email = 'admin@votredomaine.com';
 ```
 
 ## Credentials
-- **Admin**: `/admin` → MDP: `BEATTRIBE2026`
-- **Pricing**: `/pricing`
+- **Admin Legacy**: `/admin` → MDP: `BEATTRIBE2026` (pour le dashboard admin)
+- **Admin Real**: Utilisateur avec `role='admin'` dans la table `profiles`
 
 ## URLs
 - **Accueil**: `/`
-- **Session**: `/session` ou `/session/:id`
-- **Admin**: `/admin`
+- **Login**: `/login`
 - **Tarifs**: `/pricing`
+- **Session**: `/session`
+- **Admin**: `/admin`
 
 ## Tâches Restantes
 
-### P1 - Configuration Stripe
-- [ ] Créer Payment Links dans Stripe Dashboard
-- [ ] Configurer table `admin_config` dans Supabase
-- [ ] Webhook Stripe pour mettre à jour `subscription_status`
+### P1 - Configuration Supabase
+- [ ] Créer table `profiles` dans Supabase
+- [ ] Activer Google Auth Provider
+- [ ] Créer l'utilisateur admin
 
-### P2 - Prochaines
-- [ ] Table `profiles` Supabase avec champs subscription
-- [ ] Authentification Supabase Auth
-- [ ] Gestion résiliation/changement de plan
+### P2 - Stripe
+- [ ] Créer Payment Links dans Stripe Dashboard
+- [ ] Webhook pour mettre à jour `subscription_status`
 
 ### P3 - Backlog
 - [ ] Dashboard utilisateur (historique, factures)
 - [ ] Analytics abonnements
 
 ---
-*Dernière mise à jour: 28 Jan 2026 - Système d'abonnement Stripe + CGU*
+*Dernière mise à jour: 28 Jan 2026 - Authentification Supabase complète*
