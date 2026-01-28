@@ -315,14 +315,34 @@ export const SessionPage: React.FC = () => {
   const [participantsState, setParticipantsState] = useState<Participant[]>(BASE_PARTICIPANTS);
   
   // Host mic state
-  const [hostMicGain, setHostMicGain] = useState(80);
-  const [hostMicMuted, setHostMicMuted] = useState(false);
+  const [hostMicActive, setHostMicActive] = useState(false);
+  const [musicDucked, setMusicDucked] = useState(false);
+  const originalVolumeRef = useRef<number>(100);
   
   const [audioState, setAudioState] = useState<AudioState | null>(null);
   const [syncState, setSyncState] = useState<SyncState | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [autoPlayPending, setAutoPlayPending] = useState<string | null>(null);
+
+  // Duck effect: lower music when host speaks
+  const handleDuckMusic = useCallback((shouldDuck: boolean) => {
+    const audioEl = document.querySelector('audio');
+    if (!audioEl) return;
+    
+    if (shouldDuck && !musicDucked) {
+      // Save original volume and duck
+      originalVolumeRef.current = audioEl.volume;
+      audioEl.volume = Math.max(0.1, audioEl.volume * 0.3); // Duck to 30%
+      setMusicDucked(true);
+      console.log('[DUCK] Music ducked to', audioEl.volume);
+    } else if (!shouldDuck && musicDucked) {
+      // Restore original volume
+      audioEl.volume = originalVolumeRef.current;
+      setMusicDucked(false);
+      console.log('[DUCK] Music restored to', audioEl.volume);
+    }
+  }, [musicDucked]);
 
   // Auto-play effect: when a new track is set via autoplay, force play
   useEffect(() => {
