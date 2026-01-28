@@ -1,24 +1,88 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/context/ThemeContext';
-import { useSubscription } from '@/context/SubscriptionContext';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Check, Crown, Zap, Building2, ArrowLeft, ExternalLink } from 'lucide-react';
+import { Check, Crown, Zap, Building2, ArrowLeft, ExternalLink, Sparkles } from 'lucide-react';
+
+// Plan data
+interface Plan {
+  id: string;
+  name: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  currency: string;
+  features: string[];
+  trackLimit: number;
+  stripeMonthlyLink?: string;
+  stripeYearlyLink?: string;
+  isPopular?: boolean;
+}
+
+const PLANS: Plan[] = [
+  {
+    id: 'trial',
+    name: 'Essai Gratuit',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    currency: 'EUR',
+    features: [
+      '1 chanson max',
+      '1 session active',
+      'Participants illimités',
+      'Synchronisation temps réel',
+    ],
+    trackLimit: 1,
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    monthlyPrice: 9.99,
+    yearlyPrice: 99.99,
+    currency: 'EUR',
+    features: [
+      '50 chansons',
+      'Sessions illimitées',
+      'Participants illimités',
+      'Voix en temps réel',
+      'Support prioritaire',
+    ],
+    trackLimit: 50,
+    isPopular: true,
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    monthlyPrice: 29.99,
+    yearlyPrice: 299.99,
+    currency: 'EUR',
+    features: [
+      'Chansons illimitées',
+      'Sessions illimitées',
+      'API dédiée',
+      'Support 24/7',
+      'Analytics avancées',
+      'Personnalisation marque',
+    ],
+    trackLimit: -1,
+  },
+];
 
 const PricingPage: React.FC = () => {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const { 
-    user, 
+    isAuthenticated,
+    profile, 
     isAdmin, 
     isSubscribed, 
     hasAcceptedTerms, 
-    acceptTerms, 
-    plans 
-  } = useSubscription();
+    acceptTerms,
+  } = useAuth();
 
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [termsChecked, setTermsChecked] = useState(hasAcceptedTerms);
   const [isAccepting, setIsAccepting] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -33,9 +97,15 @@ const PricingPage: React.FC = () => {
   };
 
   // Handle plan selection
-  const handleSelectPlan = async (plan: typeof plans[0]) => {
+  const handleSelectPlan = async (plan: Plan) => {
+    // If not authenticated, redirect to login
+    if (!isAuthenticated && plan.id !== 'trial') {
+      navigate('/login', { state: { from: '/pricing' } });
+      return;
+    }
+
     // If terms not accepted, require acceptance first
-    if (!hasAcceptedTerms && !termsChecked) {
+    if (!hasAcceptedTerms && !termsChecked && plan.id !== 'trial') {
       setShowTermsModal(true);
       return;
     }
@@ -45,15 +115,24 @@ const PricingPage: React.FC = () => {
       await handleAcceptTerms();
     }
 
-    // If free trial, go directly to session
+    // If free trial, go to session (or login if not authenticated)
     if (plan.id === 'trial') {
-      navigate('/session');
+      if (isAuthenticated) {
+        navigate('/session');
+      } else {
+        navigate('/login', { state: { from: '/session' } });
+      }
       return;
     }
 
+    // Get Stripe link based on billing period
+    const stripeLink = billingPeriod === 'monthly' 
+      ? plan.stripeMonthlyLink 
+      : plan.stripeYearlyLink;
+
     // If Stripe link exists, redirect
-    if (plan.stripe_link) {
-      window.open(plan.stripe_link, '_blank');
+    if (stripeLink) {
+      window.open(stripeLink, '_blank');
     } else {
       // Fallback: show message
       alert('Les paiements Stripe seront bientôt disponibles. Contactez-nous pour un accès anticipé.');
@@ -64,11 +143,26 @@ const PricingPage: React.FC = () => {
   const getPlanIcon = (planId: string) => {
     switch (planId) {
       case 'trial': return <Zap className="w-6 h-6" />;
-      case 'monthly': return <Crown className="w-6 h-6" />;
-      case 'yearly': return <Crown className="w-6 h-6" />;
+      case 'pro': return <Crown className="w-6 h-6" />;
       case 'enterprise': return <Building2 className="w-6 h-6" />;
-      default: return <Zap className="w-6 h-6" />;
+      default: return <Sparkles className="w-6 h-6" />;
     }
+  };
+
+  // Get price to display
+  const getDisplayPrice = (plan: Plan) => {
+    if (plan.monthlyPrice === 0) return 'Gratuit';
+    const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+    return `${price}€`;
+  };
+
+  // Get savings for yearly
+  const getYearlySavings = (plan: Plan) => {
+    if (plan.monthlyPrice === 0) return null;
+    const monthlyCost = plan.monthlyPrice * 12;
+    const yearlyCost = plan.yearlyPrice;
+    const savings = Math.round(((monthlyCost - yearlyCost) / monthlyCost) * 100);
+    return savings > 0 ? savings : null;
   };
 
   return (
@@ -93,28 +187,55 @@ const PricingPage: React.FC = () => {
           >
             Choisissez votre plan
           </h1>
-          <p className="text-white/60 text-lg max-w-2xl mx-auto">
+          <p className="text-white/60 text-lg max-w-2xl mx-auto mb-8">
             Commencez gratuitement avec l'essai, puis passez à un abonnement pour débloquer toutes les fonctionnalités.
           </p>
 
+          {/* Billing Toggle */}
+          <div className="inline-flex items-center gap-3 p-1 rounded-full bg-white/5 border border-white/10">
+            <button
+              onClick={() => setBillingPeriod('monthly')}
+              className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${
+                billingPeriod === 'monthly'
+                  ? 'bg-white text-black'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Mensuel
+            </button>
+            <button
+              onClick={() => setBillingPeriod('yearly')}
+              className={`px-6 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
+                billingPeriod === 'yearly'
+                  ? 'bg-white text-black'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Annuel
+              <span className="px-2 py-0.5 text-xs bg-green-500 text-white rounded-full">
+                -17%
+              </span>
+            </button>
+          </div>
+
           {/* Admin badge */}
           {isAdmin && (
-            <Badge className="mt-4 bg-purple-500/20 text-purple-400 border-purple-500/30 px-4 py-2">
+            <Badge className="mt-6 bg-purple-500/20 text-purple-400 border-purple-500/30 px-4 py-2">
               👑 Mode Admin - Accès illimité gratuit
             </Badge>
           )}
 
           {/* Current subscription */}
-          {user && !isAdmin && (
+          {profile && !isAdmin && (
             <Badge 
-              className={`mt-4 px-4 py-2 ${
+              className={`mt-6 px-4 py-2 ${
                 isSubscribed 
                   ? 'bg-green-500/20 text-green-400 border-green-500/30' 
                   : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
               }`}
             >
               {isSubscribed 
-                ? `✓ Abonné ${user.subscription_status}` 
+                ? `✓ Abonné ${profile.subscription_status}` 
                 : '🎵 Version d\'essai'
               }
             </Badge>
@@ -122,8 +243,8 @@ const PricingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* CGU Checkbox */}
-      {!hasAcceptedTerms && (
+      {/* CGU Checkbox (if not accepted) */}
+      {isAuthenticated && !hasAcceptedTerms && (
         <div className="max-w-xl mx-auto mb-8">
           <div className="p-4 rounded-lg bg-white/5 border border-white/10">
             <label className="flex items-start gap-3 cursor-pointer">
@@ -156,100 +277,111 @@ const PricingPage: React.FC = () => {
       )}
 
       {/* Plans Grid */}
-      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {plans.map((plan) => (
-          <Card 
-            key={plan.id}
-            className={`relative border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:border-white/20 ${
-              plan.is_popular ? 'ring-2 ring-purple-500/50' : ''
-            }`}
-          >
-            {/* Popular badge */}
-            {plan.is_popular && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge 
-                  className="px-3 py-1"
-                  style={{ background: theme.colors.gradient.primary }}
-                >
-                  Plus populaire
-                </Badge>
-              </div>
-            )}
-
-            <CardHeader className="text-center pb-2">
-              <div 
-                className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center"
-                style={{ 
-                  background: plan.is_popular 
-                    ? theme.colors.gradient.primary 
-                    : 'rgba(255,255,255,0.1)' 
-                }}
-              >
-                {getPlanIcon(plan.id)}
-              </div>
-              <CardTitle className="text-white">{plan.name}</CardTitle>
-              <CardDescription className="text-white/50">
-                {plan.track_limit === -1 
-                  ? 'Chansons illimitées' 
-                  : `${plan.track_limit} chanson${plan.track_limit > 1 ? 's' : ''}`
-                }
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="text-center">
-              {/* Price */}
-              <div className="mb-6">
-                <span className="text-4xl font-bold text-white">
-                  {plan.price === 0 ? 'Gratuit' : `${plan.price}€`}
-                </span>
-                {plan.price > 0 && (
-                  <span className="text-white/50 text-sm">
-                    /{plan.interval === 'month' ? 'mois' : 'an'}
-                  </span>
-                )}
-              </div>
-
-              {/* Features */}
-              <ul className="space-y-3 mb-6 text-left">
-                {plan.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-center gap-2 text-white/70 text-sm">
-                    <Check size={16} className="text-green-400 flex-shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA Button */}
-              <Button
-                onClick={() => handleSelectPlan(plan)}
-                disabled={!termsChecked && !hasAcceptedTerms && plan.id !== 'trial'}
-                className={`w-full ${
-                  plan.is_popular 
-                    ? 'text-white' 
-                    : 'bg-white/10 hover:bg-white/20 text-white'
-                }`}
-                style={plan.is_popular ? { background: theme.colors.gradient.primary } : {}}
-              >
-                {plan.id === 'trial' ? (
-                  'Commencer gratuitement'
-                ) : plan.stripe_link ? (
-                  <>
-                    Souscrire <ExternalLink size={14} className="ml-1" />
-                  </>
-                ) : (
-                  'Bientôt disponible'
-                )}
-              </Button>
-
-              {/* Terms reminder */}
-              {!termsChecked && !hasAcceptedTerms && plan.id !== 'trial' && (
-                <p className="text-xs text-yellow-400/70 mt-2">
-                  Acceptez les CGU pour souscrire
-                </p>
+      <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+        {PLANS.map((plan) => {
+          const savings = getYearlySavings(plan);
+          
+          return (
+            <Card 
+              key={plan.id}
+              className={`relative border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:border-white/20 ${
+                plan.isPopular ? 'ring-2 ring-purple-500/50 scale-105' : ''
+              }`}
+            >
+              {/* Popular badge */}
+              {plan.isPopular && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge 
+                    className="px-3 py-1"
+                    style={{ background: theme.colors.gradient.primary }}
+                  >
+                    Plus populaire
+                  </Badge>
+                </div>
               )}
-            </CardContent>
-          </Card>
-        ))}
+
+              {/* Savings badge for yearly */}
+              {billingPeriod === 'yearly' && savings && (
+                <div className="absolute -top-3 right-4">
+                  <Badge className="px-2 py-1 bg-green-500/20 text-green-400 border-green-500/30">
+                    -{savings}%
+                  </Badge>
+                </div>
+              )}
+
+              <CardHeader className="text-center pb-2">
+                <div 
+                  className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center"
+                  style={{ 
+                    background: plan.isPopular 
+                      ? theme.colors.gradient.primary 
+                      : 'rgba(255,255,255,0.1)' 
+                  }}
+                >
+                  {getPlanIcon(plan.id)}
+                </div>
+                <CardTitle className="text-white">{plan.name}</CardTitle>
+                <CardDescription className="text-white/50">
+                  {plan.trackLimit === -1 
+                    ? 'Chansons illimitées' 
+                    : `${plan.trackLimit} chanson${plan.trackLimit > 1 ? 's' : ''}`
+                  }
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="text-center">
+                {/* Price */}
+                <div className="mb-6">
+                  <span className="text-4xl font-bold text-white">
+                    {getDisplayPrice(plan)}
+                  </span>
+                  {plan.monthlyPrice > 0 && (
+                    <span className="text-white/50 text-sm">
+                      /{billingPeriod === 'monthly' ? 'mois' : 'an'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Features */}
+                <ul className="space-y-3 mb-6 text-left">
+                  {plan.features.map((feature, idx) => (
+                    <li key={idx} className="flex items-center gap-2 text-white/70 text-sm">
+                      <Check size={16} className="text-green-400 flex-shrink-0" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                {/* CTA Button */}
+                <Button
+                  onClick={() => handleSelectPlan(plan)}
+                  disabled={!termsChecked && !hasAcceptedTerms && plan.id !== 'trial' && isAuthenticated}
+                  className={`w-full ${
+                    plan.isPopular 
+                      ? 'text-white' 
+                      : 'bg-white/10 hover:bg-white/20 text-white'
+                  }`}
+                  style={plan.isPopular ? { background: theme.colors.gradient.primary } : {}}
+                >
+                  {plan.id === 'trial' ? (
+                    isAuthenticated ? 'Commencer gratuitement' : 'Créer un compte'
+                  ) : (
+                    <>
+                      Souscrire <ExternalLink size={14} className="ml-1" />
+                    </>
+                  )}
+                </Button>
+
+                {/* Terms reminder */}
+                {isAuthenticated && !termsChecked && !hasAcceptedTerms && plan.id !== 'trial' && (
+                  <p className="text-xs text-yellow-400/70 mt-2">
+                    Acceptez les CGU pour souscrire
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Admin skip notice */}
