@@ -181,53 +181,104 @@ const Dashboard: React.FC = () => {
     }
   }, [settings.favicon_url]);
 
-  // Load settings from Supabase ONLY
+  // Load settings from Supabase with robust error handling
   useEffect(() => {
+    let isMounted = true;
+    
     const loadSettings = async () => {
+      if (!isMounted) return;
+      
       console.log('[CMS] Loading site settings from Supabase...');
       setDbStatus('checking');
       
+      // Check if Supabase is configured
       if (!isSupabaseConfigured || !supabase) {
-        console.warn('[CMS] Supabase not configured');
-        setDbStatus('error');
-        setDbError('Supabase non configuré. Exécutez supabase-site-settings.sql');
-        setIsLoadingSettings(false);
+        console.warn('[CMS] Supabase not configured - using defaults');
+        if (isMounted) {
+          setDbStatus('error');
+          setDbError('Supabase non configuré. Les valeurs par défaut sont utilisées.');
+          setSettings(DEFAULT_SETTINGS);
+          setOriginalSettings(DEFAULT_SETTINGS);
+          setIsLoadingSettings(false);
+        }
         return;
       }
 
       try {
-        const { data, error } = await supabase
+        // Use a fresh query - don't reuse response objects
+        const response = await supabase
           .from('site_settings')
           .select('*')
           .limit(1)
-          .single();
+          .maybeSingle(); // Use maybeSingle() instead of single() to avoid error when no data
         
-        if (error) {
-          console.error('[CMS] Supabase error:', error.message);
-          setDbStatus('error');
-          setDbError(`Erreur DB: ${error.message}. Exécutez supabase-site-settings.sql`);
-          // Use defaults on error
+        if (!isMounted) return;
+        
+        // Check for error
+        if (response.error) {
+          const errorCode = response.error.code;
+          const errorMessage = response.error.message;
+          
+          console.warn('[CMS] Supabase query error:', errorCode, errorMessage);
+          
+          // Handle specific errors gracefully
+          if (errorCode === '42P01' || errorMessage.includes('does not exist')) {
+            // Table doesn't exist - show helpful message but don't crash
+            setDbStatus('error');
+            setDbError('Table site_settings non trouvée. Exécutez supabase-site-settings.sql');
+          } else if (errorCode === 'PGRST116') {
+            // No rows found - use defaults
+            setDbStatus('error');
+            setDbError('Aucune configuration trouvée. Les valeurs par défaut sont utilisées.');
+          } else {
+            setDbStatus('error');
+            setDbError(`Erreur Supabase: ${errorMessage}`);
+          }
+          
+          // Always fallback to defaults
           setSettings(DEFAULT_SETTINGS);
           setOriginalSettings(DEFAULT_SETTINGS);
-        } else if (data) {
-          console.log('[CMS] ✅ Settings loaded from Supabase:', data.site_name);
-          setSettings(data as SiteSettings);
-          setOriginalSettings(data as SiteSettings);
+        } else if (response.data) {
+          // Success - data loaded
+          console.log('[CMS] ✅ Settings loaded from Supabase:', response.data.site_name);
+          setSettings(response.data as SiteSettings);
+          setOriginalSettings(response.data as SiteSettings);
           setDbStatus('connected');
           setDbError(null);
+        } else {
+          // No data but no error (empty table)
+          console.log('[CMS] No settings in DB, using defaults');
+          setDbStatus('error');
+          setDbError('Table vide. Les valeurs par défaut sont utilisées.');
+          setSettings(DEFAULT_SETTINGS);
+          setOriginalSettings(DEFAULT_SETTINGS);
         }
       } catch (err) {
-        console.error('[CMS] Exception:', err);
-        setDbStatus('error');
-        setDbError('Exception lors du chargement');
+        // Catch any unexpected errors
+        console.error('[CMS] Unexpected exception:', err);
+        if (isMounted) {
+          setDbStatus('error');
+          setDbError('Erreur inattendue. Les valeurs par défaut sont utilisées.');
+          setSettings(DEFAULT_SETTINGS);
+          setOriginalSettings(DEFAULT_SETTINGS);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSettings(false);
+        }
       }
-      
-      setIsLoadingSettings(false);
     };
 
     if (hasAdminAccess || isAdminByEmail) {
       loadSettings();
+    } else {
+      setIsLoadingSettings(false);
     }
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, [hasAdminAccess, isAdminByEmail]);
 
   // Update field
