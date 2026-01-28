@@ -29,7 +29,7 @@
    - **Authorized JavaScript origins** :
      ```
      https://tfghpbgbtpgrjlhomlvz.supabase.co
-     https://syncbeats-24.preview.emergentagent.com
+     https://music-tribe-2.preview.emergentagent.com
      ```
    - **Authorized redirect URIs** :
      ```
