@@ -414,61 +414,104 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        const userProfile = await fetchProfile(
-          session.user.id, 
-          session.user.email || '', 
-          session.user.user_metadata
-        );
-        setProfile(userProfile);
-        
-        // Set admin flag in sessionStorage if user is admin
-        if (userProfile?.role === 'admin') {
-          sessionStorage.setItem('bt_is_admin', 'true');
-        }
-      }
-      
-      setIsLoading(false);
-    });
+    let isMounted = true;
 
-    // Listen for auth changes
+    // Get initial session
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('[AUTH] getSession error:', error.message);
+          if (isMounted) setIsLoading(false);
+          return;
+        }
+
+        if (isMounted) {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
+        
+        if (session?.user && isMounted) {
+          console.log('[AUTH] Initial session found for:', session.user.email);
+          
+          const userProfile = await fetchProfile(
+            session.user.id, 
+            session.user.email || '', 
+            session.user.user_metadata
+          );
+          
+          if (isMounted) {
+            setProfile(userProfile);
+            
+            console.log('[AUTH] Initial profile loaded:', {
+              email: session.user.email,
+              role: userProfile?.role,
+              isAdmin: userProfile?.role === 'admin'
+            });
+            
+            // Set admin flag in sessionStorage if user is admin
+            if (userProfile?.role === 'admin') {
+              sessionStorage.setItem('bt_is_admin', 'true');
+              console.log('[AUTH] ✅ Admin privileges activated');
+            }
+          }
+        }
+        
+        if (isMounted) setIsLoading(false);
+      } catch (err) {
+        console.error('[AUTH] Init error:', err);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // Listen for auth changes (includes Google OAuth callback)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[AUTH] Auth state changed:', event, session?.user?.email);
       
+      if (!isMounted) return;
+      
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
+        // Small delay to ensure session is fully established
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         const userProfile = await fetchProfile(
           session.user.id, 
           session.user.email || '', 
           session.user.user_metadata
         );
-        setProfile(userProfile);
         
-        console.log('[AUTH] Profile loaded:', {
-          email: session.user.email,
-          role: userProfile?.role,
-          isAdmin: userProfile?.role === 'admin'
-        });
-        
-        if (userProfile?.role === 'admin') {
-          sessionStorage.setItem('bt_is_admin', 'true');
-        } else {
-          sessionStorage.removeItem('bt_is_admin');
+        if (isMounted) {
+          setProfile(userProfile);
+          
+          console.log('[AUTH] Profile loaded after', event, ':', {
+            email: session.user.email,
+            role: userProfile?.role,
+            isAdmin: userProfile?.role === 'admin'
+          });
+          
+          if (userProfile?.role === 'admin') {
+            sessionStorage.setItem('bt_is_admin', 'true');
+            console.log('[AUTH] ✅ Admin privileges activated for:', session.user.email);
+          } else {
+            sessionStorage.removeItem('bt_is_admin');
+          }
         }
       } else {
-        setProfile(null);
-        sessionStorage.removeItem('bt_is_admin');
+        if (isMounted) {
+          setProfile(null);
+          sessionStorage.removeItem('bt_is_admin');
+        }
       }
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, [fetchProfile]);
