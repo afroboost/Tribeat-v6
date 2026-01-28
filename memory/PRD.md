@@ -3,132 +3,132 @@
 ## Vision
 **"Unite Through Rhythm"** - Application d'écoute musicale synchronisée en temps réel.
 
-## État Actuel - VOICE STREAMING COMPLET ✅
+## État Actuel - SYSTÈME D'ABONNEMENT STRIPE ✅
 
-### ✅ Transmission Voix Host → Participants (28 Jan 2026)
+### ✅ Implémentation Abonnement (28 Jan 2026)
 
-#### Architecture Audio WebRTC
+#### Architecture Subscription
 ```
-Host (Micro)
-    │
-    └── getUserMedia() ──► PeerJS ──► Participant 1 (🔊 Haut-parleurs)
-                                └──► Participant 2 (🔊 Haut-parleurs)
-                                └──► Participant N (🔊 Haut-parleurs)
+┌─────────────────────────────────────────────────┐
+│                  ADMIN                          │
+│  • Accès illimité (pas de paiement)             │
+│  • Création sessions sans limite                │
+│  • Upload 999 chansons                          │
+│  • Badge "👑 Mode Admin"                        │
+└─────────────────────────────────────────────────┘
+                      │
+┌─────────────────────────────────────────────────┐
+│             UTILISATEUR STANDARD                │
+│  • Version d'essai : 1 chanson max              │
+│  • Doit accepter CGU avant paiement             │
+│  • Redirection Stripe pour abonnement           │
+│  • Badge "🎵 Essai (1 titre)"                   │
+└─────────────────────────────────────────────────┘
 ```
 
-### Flux Audio Implémenté
+### Fichiers Créés
 
-#### 1. HÔTE - Capture et Broadcast
+| Fichier | Description |
+|---------|-------------|
+| `/context/SubscriptionContext.tsx` | Gestion état abonnement, rôle, CGU |
+| `/pages/PricingPage.tsx` | Page des offres avec checkbox CGU |
+
+### Plans Disponibles
+
+| Plan | Prix | Limite Chansons |
+|------|------|-----------------|
+| Essai Gratuit | 0€ | 1 |
+| Pro Mensuel | 9.99€/mois | 50 |
+| Pro Annuel | 99.99€/an | 200 |
+| Enterprise | 299.99€/an | Illimité |
+
+### Fonctionnalités Implémentées
+
+#### 1. Contexte SubscriptionContext
 ```typescript
-// Clic sur "Micro" → getUserMedia direct
-const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const { isAdmin, canUploadTrack, trackLimit, acceptTerms } = useSubscription();
 
-// Connexion PeerJS avec stream
-await connectPeer(stream);
+// Admin bypass toutes les limites
+if (isAdmin) return true;
 
-// Broadcast vers tous les participants
-broadcastAudio(stream);
-```
-
-#### 2. PARTICIPANT - Réception et Lecture
-```typescript
-// Appel entrant détecté
-peer.on('call', (call) => {
-  call.answer(); // Auto-réponse
-  
-  call.on('stream', (remoteStream) => {
-    // Créer élément audio dynamique
-    const audioEl = getOrCreateRemoteAudioElement();
-    audioEl.srcObject = remoteStream;
-    audioEl.volume = 1.0;
-    audioEl.play(); // Lecture sur haut-parleurs
-  });
-});
-```
-
-#### 3. Élément Audio Dynamique
-```typescript
-function getOrCreateRemoteAudioElement() {
-  let audioEl = document.getElementById('remote-voice-audio');
-  if (!audioEl) {
-    audioEl = document.createElement('audio');
-    audioEl.id = 'remote-voice-audio';
-    audioEl.autoplay = true;
-    audioEl.setAttribute('playsinline', 'true'); // iOS
-    audioEl.volume = 1.0;
-    document.body.appendChild(audioEl);
-  }
-  return audioEl;
+// Vérification limite d'upload
+if (currentTrackCount >= trackLimit) {
+  return false; // Bloqué
 }
 ```
 
-### Indicateurs Visuels
+#### 2. Page Pricing (/pricing)
+- Grille de 4 offres
+- Badge "Plus populaire" sur Pro Mensuel
+- Checkbox CGU obligatoire avant paiement
+- Modal CGU complet
 
-| Élément | Hôte | Participant |
-|---------|------|-------------|
-| Bouton Micro | ✅ Visible | ❌ Masqué |
-| VU-Mètre | ✅ Actif quand parle | ❌ N/A |
-| Badge "📡 Live" | ✅ Quand broadcast | ❌ N/A |
-| Badge "🔉 Voix reçue" | ❌ N/A | ✅ Quand écoute |
-| Badge "🔗 WebRTC" | ✅ Connecté | ✅ Connecté |
-
-### Synchronisation Supabase
-- `HOST_MIC_READY` : Envoyé quand le micro de l'hôte est prêt
-- `VOICE_START` : Envoyé quand l'hôte commence à parler
-
-### Mixage Audio
-- La **musique** joue via `<audio>` HTML5 classique
-- La **voix** joue via l'élément `#remote-voice-audio` créé dynamiquement
-- Les deux se mélangent naturellement sur les haut-parleurs du participant
-
-### Logs Console
-```
-[PEER] 📞 INCOMING CALL from: beattribe-host-xxx
-[PEER] 🔊 RECEIVING VOICE STREAM FROM HOST
-[PEER] ✅ Remote audio playing!
-[SESSION] 🔉 Voice playback started!
+#### 3. Limitations TrackUploader
+```typescript
+{isTrialLimitReached && (
+  <div className="bg-yellow-500/10">
+    <Lock /> Limite de la version d'essai : 1 chanson max
+    <Link to="/pricing">Voir les offres</Link>
+  </div>
+)}
 ```
 
-### Critères de Réussite ✅
-- [x] Host parle → VU-mètre bouge
-- [x] Participant entend la voix sur haut-parleurs
-- [x] Musique continue en fond (mixage)
-- [x] Indicateur "🔉 Voix reçue" visible côté participant
+#### 4. Badges UI
+- Admin : "👑 Mode Admin" (violet)
+- Abonné : "✓ Abonné {type}" (vert)
+- Essai : "🎵 Essai (1 titre)" (jaune, cliquable → /pricing)
+
+### Logique Admin (Privilège Total)
+- `sessionStorage.bt_is_admin` stocké après connexion `/admin`
+- SubscriptionContext vérifie ce flag
+- Si admin → role='admin', subscription='enterprise', trackLimit=-1
+
+### Checklist ✅
+- [x] Exception 'admin' dans le garde de route
+- [x] Checkbox CGU fonctionnelle
+- [x] Limitation playlist dynamique selon rôle
 - [x] Build `yarn build` réussi
-- [x] Upload/Autoplay NON MODIFIÉ ✅
+- [x] WebRTC/Microphone NON MODIFIÉ ✅
+- [x] Autoplay NON MODIFIÉ ✅
 
-## Test Multi-Appareils
+## Configuration Stripe (À Faire)
 
-1. **PC (Hôte)** : Créer session → Activer micro → Parler
-2. **Mobile (Participant)** : Rejoindre session → Écouter
-3. **Résultat attendu** : Voix de l'hôte audible < 1 seconde de latence
-
-## Configuration
-
-```env
-REACT_APP_SUPABASE_URL=https://tfghpbgbtpgrjlhomlvz.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=sb_publishable_***
-REACT_APP_SUPABASE_BUCKET=audio-tracks
+Pour activer les paiements :
+1. Créer les Payment Links dans Stripe Dashboard
+2. Ajouter dans Supabase `admin_config.stripe_links`:
+```json
+{
+  "monthly": "https://buy.stripe.com/xxx",
+  "yearly": "https://buy.stripe.com/yyy",
+  "enterprise": "https://buy.stripe.com/zzz"
+}
 ```
 
 ## Credentials
 - **Admin**: `/admin` → MDP: `BEATTRIBE2026`
+- **Pricing**: `/pricing`
+
+## URLs
+- **Accueil**: `/`
+- **Session**: `/session` ou `/session/:id`
+- **Admin**: `/admin`
+- **Tarifs**: `/pricing`
 
 ## Tâches Restantes
 
-### P1 - À Tester sur Appareils Réels
-- [ ] Tester transmission voix Host → Participants
-- [ ] Valider latence < 1 seconde
-- [ ] Tester sur iOS (Safari) et Android (Chrome)
+### P1 - Configuration Stripe
+- [ ] Créer Payment Links dans Stripe Dashboard
+- [ ] Configurer table `admin_config` dans Supabase
+- [ ] Webhook Stripe pour mettre à jour `subscription_status`
 
 ### P2 - Prochaines
-- [ ] Convertir composants UI restants en `.tsx`
-- [ ] Fonctionnalité "Demander la parole" pour participants
+- [ ] Table `profiles` Supabase avec champs subscription
+- [ ] Authentification Supabase Auth
+- [ ] Gestion résiliation/changement de plan
 
 ### P3 - Backlog
-- [ ] Gestion du pseudo hôte éditable
-- [ ] Persistance du thème via Supabase
-- [ ] Authentification réelle avec Supabase Auth
+- [ ] Dashboard utilisateur (historique, factures)
+- [ ] Analytics abonnements
 
 ---
-*Dernière mise à jour: 28 Jan 2026 - Voice Streaming Host → Participants*
+*Dernière mise à jour: 28 Jan 2026 - Système d'abonnement Stripe + CGU*
