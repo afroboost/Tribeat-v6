@@ -7,8 +7,10 @@ export interface MicrophoneState {
   volume: number;
   audioLevel: number; // 0-100 for VU meter
   error: string | null;
+  errorType: 'permission' | 'device' | 'browser' | 'https' | null;
   deviceId: string | null;
   devices: MediaDeviceInfo[];
+  hasDevices: boolean | null; // null = not checked, true = has devices, false = no devices
 }
 
 export interface UseMicrophoneOptions {
@@ -20,6 +22,7 @@ export interface UseMicrophoneOptions {
 
 export interface UseMicrophoneReturn {
   state: MicrophoneState;
+  checkDevices: () => Promise<{ hasDevices: boolean; devices: MediaDeviceInfo[] }>;
   startCapture: () => Promise<boolean>;
   stopCapture: () => void;
   toggleMute: () => void;
@@ -37,8 +40,10 @@ const initialState: MicrophoneState = {
   volume: 100,
   audioLevel: 0,
   error: null,
+  errorType: null,
   deviceId: null,
   devices: [],
+  hasDevices: null,
 };
 
 /**
@@ -67,16 +72,95 @@ export function useMicrophone(options: UseMicrophoneOptions = {}): UseMicrophone
     setState(prev => ({ ...prev, ...updates }));
   }, []);
 
+  // Check if HTTPS is required (getUserMedia needs secure context)
+  const checkSecureContext = useCallback((): boolean => {
+    const isSecure = window.isSecureContext || 
+                     location.protocol === 'https:' || 
+                     location.hostname === 'localhost' ||
+                     location.hostname === '127.0.0.1';
+    
+    if (!isSecure) {
+      console.warn('[WebRTC] ⚠️ Non-secure context detected. getUserMedia requires HTTPS.');
+      updateState({ 
+        error: 'Le microphone nécessite une connexion HTTPS. Utilisez un lien sécurisé.',
+        errorType: 'https'
+      });
+    }
+    return isSecure;
+  }, [updateState]);
+
+  // Check for available audio input devices BEFORE requesting permission
+  const checkDevices = useCallback(async (): Promise<{ hasDevices: boolean; devices: MediaDeviceInfo[] }> => {
+    console.log('[WebRTC] Checking available audio devices...');
+    
+    // Check secure context first
+    if (!checkSecureContext()) {
+      return { hasDevices: false, devices: [] };
+    }
+    
+    // Check browser support
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      console.error('[WebRTC] ❌ Browser does not support mediaDevices API');
+      updateState({ 
+        error: 'Votre navigateur ne supporte pas l\'accès au microphone.',
+        errorType: 'browser',
+        hasDevices: false
+      });
+      return { hasDevices: false, devices: [] };
+    }
+
+    try {
+      // First, request temporary permission to get real device labels
+      // Some browsers return empty labels until permission is granted
+      let tempStream: MediaStream | null = null;
+      try {
+        tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('[WebRTC] ✅ Temporary permission granted for device enumeration');
+      } catch (permErr) {
+        console.log('[WebRTC] Could not get temp permission, will check devices anyway');
+      }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(d => d.kind === 'audioinput');
+      
+      // Release temporary stream
+      if (tempStream) {
+        tempStream.getTracks().forEach(track => track.stop());
+      }
+      
+      console.log('[WebRTC] Found audio input devices:', audioInputs.length, audioInputs.map(d => d.label || d.deviceId));
+      
+      const hasDevices = audioInputs.length > 0;
+      
+      updateState({ 
+        devices: audioInputs, 
+        hasDevices,
+        error: hasDevices ? null : 'Aucun microphone détecté. Vérifiez les permissions de votre navigateur (icône cadenas).',
+        errorType: hasDevices ? null : 'device'
+      });
+      
+      return { hasDevices, devices: audioInputs };
+    } catch (err) {
+      console.error('[WebRTC] ❌ Failed to check devices:', err);
+      updateState({ 
+        error: 'Impossible de vérifier les périphériques audio.',
+        errorType: 'browser',
+        hasDevices: false 
+      });
+      return { hasDevices: false, devices: [] };
+    }
+  }, [updateState, checkSecureContext]);
+
   // Refresh available audio devices
   const refreshDevices = useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = devices.filter(d => d.kind === 'audioinput');
-      updateState({ devices: audioInputs });
+      updateState({ devices: audioInputs, hasDevices: audioInputs.length > 0 });
       return audioInputs;
     } catch (err) {
-      console.error('[MIC] Failed to enumerate devices:', err);
-      updateState({ error: 'Impossible de lister les microphones' });
+      console.error('[WebRTC] Failed to enumerate devices:', err);
+      updateState({ error: 'Impossible de lister les microphones', errorType: 'browser' });
       return [];
     }
   }, [updateState]);
@@ -105,16 +189,40 @@ export function useMicrophone(options: UseMicrophoneOptions = {}): UseMicrophone
 
   // Start capturing audio
   const startCapture = useCallback(async (): Promise<boolean> => {
+    console.log('[WebRTC] Starting audio capture...');
+    
+    // Check secure context first
+    if (!checkSecureContext()) {
+      return false;
+    }
+    
     // Check browser support
     if (!navigator.mediaDevices?.getUserMedia) {
-      updateState({ error: 'Votre navigateur ne supporte pas la capture audio' });
+      updateState({ 
+        error: 'Votre navigateur ne supporte pas la capture audio.',
+        errorType: 'browser'
+      });
+      return false;
+    }
+
+    // Check for devices first if not already done
+    if (state.hasDevices === null) {
+      const { hasDevices } = await checkDevices();
+      if (!hasDevices) {
+        return false;
+      }
+    } else if (state.hasDevices === false) {
+      updateState({ 
+        error: 'Aucun microphone détecté. Vérifiez les permissions de votre navigateur (icône cadenas).',
+        errorType: 'device'
+      });
       return false;
     }
 
     try {
-      updateState({ error: null });
+      updateState({ error: null, errorType: null });
 
-      // Request microphone access
+      // Request microphone access with robust constraints
       const constraints: MediaStreamConstraints = {
         audio: {
           autoGainControl,
@@ -124,9 +232,10 @@ export function useMicrophone(options: UseMicrophoneOptions = {}): UseMicrophone
         },
       };
 
-      console.log('[MIC] Requesting microphone access...');
+      console.log('[WebRTC] Requesting microphone access with constraints:', constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
+      console.log('[WebRTC] ✅ Stream obtained:', stream.id);
 
       // Create audio context and nodes
       const audioContext = new AudioContext();
@@ -164,30 +273,41 @@ export function useMicrophone(options: UseMicrophoneOptions = {}): UseMicrophone
         isCapturing: true,
         isMuted: false,
         deviceId: settings.deviceId || null,
+        hasDevices: true,
       });
 
-      console.log('[MIC] ✅ Capture started:', audioTrack.label);
+      console.log('[WebRTC] ✅ Capture started:', audioTrack.label);
       
       // Refresh devices list
       await refreshDevices();
 
       return true;
     } catch (err) {
-      console.error('[MIC] ❌ Capture failed:', err);
+      console.error('[WebRTC] ❌ Capture failed:', err);
       
-      let errorMessage = 'Erreur lors de l\'accès au microphone';
+      let errorMessage = 'Erreur lors de l\'accès au microphone.';
+      let errorType: MicrophoneState['errorType'] = 'browser';
       
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          errorMessage = 'Accès au microphone refusé. Veuillez autoriser l\'accès.';
+          errorMessage = 'Accès au microphone refusé. Cliquez sur l\'icône cadenas 🔒 dans la barre d\'adresse pour autoriser l\'accès.';
+          errorType = 'permission';
         } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          errorMessage = 'Aucun microphone détecté sur cet appareil.';
+          errorMessage = 'Aucun microphone détecté. Vérifiez que votre micro est branché et les permissions du navigateur.';
+          errorType = 'device';
         } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-          errorMessage = 'Le microphone est utilisé par une autre application.';
+          errorMessage = 'Le microphone est utilisé par une autre application. Fermez-la et réessayez.';
+          errorType = 'device';
+        } else if (err.name === 'OverconstrainedError') {
+          errorMessage = 'Le microphone sélectionné n\'est plus disponible. Essayez un autre appareil.';
+          errorType = 'device';
+        } else if (err.name === 'SecurityError') {
+          errorMessage = 'Erreur de sécurité. Le microphone nécessite une connexion HTTPS.';
+          errorType = 'https';
         }
       }
 
-      updateState({ error: errorMessage, isCapturing: false });
+      updateState({ error: errorMessage, errorType, isCapturing: false });
       return false;
     }
   }, [
@@ -196,9 +316,12 @@ export function useMicrophone(options: UseMicrophoneOptions = {}): UseMicrophone
     noiseSuppression,
     state.deviceId,
     state.volume,
+    state.hasDevices,
     updateState,
     calculateAudioLevel,
     refreshDevices,
+    checkDevices,
+    checkSecureContext,
   ]);
 
   // Stop capturing audio
@@ -290,6 +413,7 @@ export function useMicrophone(options: UseMicrophoneOptions = {}): UseMicrophone
 
   return {
     state,
+    checkDevices,
     startCapture,
     stopCapture,
     toggleMute,
