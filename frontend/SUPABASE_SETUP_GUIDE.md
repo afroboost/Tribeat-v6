@@ -29,7 +29,7 @@
    - **Authorized JavaScript origins** :
      ```
      https://tfghpbgbtpgrjlhomlvz.supabase.co
-     https://audiohub-280.preview.emergentagent.com
+     https://syncbeats-24.preview.emergentagent.com
      ```
    - **Authorized redirect URIs** :
      ```
