@@ -82,9 +82,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return currentCount < trackLimit;
   }, [isAdmin, trackLimit]);
 
+  // Create local profile (fallback when DB is not ready)
+  const createLocalProfile = useCallback((userId: string, userEmail: string, userMetadata?: Record<string, unknown>): UserProfile => {
+    // Check if this user should be admin (by email)
+    const adminEmails = ['contact.artboost@gmail.com'];
+    const isAdminUser = adminEmails.includes(userEmail.toLowerCase());
+
+    console.log('[AUTH] Creating local profile for:', userEmail, 'isAdmin:', isAdminUser);
+
+    return {
+      id: userId,
+      email: userEmail,
+      full_name: (userMetadata?.full_name as string) || userEmail.split('@')[0] || '',
+      avatar_url: (userMetadata?.avatar_url as string) || '',
+      role: isAdminUser ? 'admin' : 'user',
+      subscription_status: isAdminUser ? 'enterprise' : 'trial',
+      has_accepted_terms: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }, []);
+
   // Fetch user profile from database
-  const fetchProfile = useCallback(async (userId: string): Promise<UserProfile | null> => {
-    if (!supabase) return null;
+  const fetchProfile = useCallback(async (userId: string, userEmail: string, userMetadata?: Record<string, unknown>): Promise<UserProfile | null> => {
+    if (!supabase) return createLocalProfile(userId, userEmail, userMetadata);
 
     try {
       const { data, error } = await supabase
@@ -97,41 +118,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Table doesn't exist or profile not found
         if (error.code === 'PGRST116' || error.code === '42P01') {
           console.warn('[AUTH] Profile not found, creating default profile');
-          // Create a local profile without database
-          return createLocalProfile(userId);
+          return createLocalProfile(userId, userEmail, userMetadata);
         }
         console.error('[AUTH] Error fetching profile:', error.message);
-        // Return local profile on error
-        return createLocalProfile(userId);
+        return createLocalProfile(userId, userEmail, userMetadata);
+      }
+
+      // Check if DB profile should be admin but isn't (fix role if email matches)
+      const adminEmails = ['contact.artboost@gmail.com'];
+      if (adminEmails.includes(userEmail.toLowerCase()) && data.role !== 'admin') {
+        console.log('[AUTH] Upgrading user to admin role');
+        // Update DB if possible
+        await supabase.from('profiles').update({ role: 'admin', subscription_status: 'enterprise' }).eq('id', userId);
+        return { ...data, role: 'admin', subscription_status: 'enterprise' } as UserProfile;
       }
 
       return data as UserProfile;
     } catch (err) {
       console.error('[AUTH] Exception fetching profile:', err);
-      // Return local profile on exception
-      return createLocalProfile(userId);
+      return createLocalProfile(userId, userEmail, userMetadata);
     }
-  }, []);
-
-  // Create local profile (fallback when DB is not ready)
-  const createLocalProfile = (userId: string): UserProfile => {
-    // Check if this user should be admin (by email)
-    const adminEmails = ['contact.artboost@gmail.com'];
-    const userEmail = user?.email || '';
-    const isAdminUser = adminEmails.includes(userEmail.toLowerCase());
-
-    return {
-      id: userId,
-      email: userEmail,
-      full_name: user?.user_metadata?.full_name || userEmail.split('@')[0] || '',
-      avatar_url: user?.user_metadata?.avatar_url || '',
-      role: isAdminUser ? 'admin' : 'user',
-      subscription_status: isAdminUser ? 'enterprise' : 'trial',
-      has_accepted_terms: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-  };
+  }, [createLocalProfile]);
 
   // Create new profile for user in database
   const createProfile = async (userId: string): Promise<UserProfile | null> => {
