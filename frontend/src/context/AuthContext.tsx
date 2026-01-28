@@ -267,17 +267,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Sign in with Google
+  // Sign in with Google - force production URL redirect
   const signInWithGoogle = useCallback(async () => {
     if (!supabase) {
       return { error: { message: 'Supabase non configuré' } as AuthError };
     }
 
+    // Get the current origin - NEVER use localhost
+    const currentOrigin = window.location.origin;
+    const redirectUrl = `${currentOrigin}/session`;
+    
+    console.log('[AUTH] Google OAuth redirect URL:', redirectUrl);
+
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/session`,
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
 
