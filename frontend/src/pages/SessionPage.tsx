@@ -919,6 +919,17 @@ export const SessionPage: React.FC = () => {
                   {peerState.isBroadcasting ? '📡 Live' : '🔗 WebRTC'}
                 </span>
               )}
+
+              {/* PARTICIPANT: Voice receiving indicator */}
+              {!isHost && peerState.isReceivingVoice && (
+                <span 
+                  className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 animate-pulse flex items-center gap-1"
+                  data-testid="voice-receiving-indicator"
+                >
+                  <span className="inline-block w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+                  🔉 Voix reçue
+                </span>
+              )}
               
               {/* User nickname display */}
               {nickname && (
