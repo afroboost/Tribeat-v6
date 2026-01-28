@@ -27,7 +27,7 @@ export interface UsePeerAudioReturn {
   disconnect: () => void;
   broadcastAudio: (stream: MediaStream) => void;
   stopBroadcast: () => void;
-  remoteAudioRef: React.RefObject<HTMLAudioElement>;
+  remoteAudioRef: React.RefObject<HTMLAudioElement | null>;
 }
 
 const initialState: PeerState = {
