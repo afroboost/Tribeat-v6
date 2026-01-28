@@ -22,30 +22,27 @@ export const AUDIO_BUCKET = storageBucket;
 
 // Log RLS configuration instructions to console
 export function logBucketConfigInstructions() {
-  console.log(`
-╔══════════════════════════════════════════════════════════════════╗
-║  SUPABASE STORAGE - Configuration requise pour le bucket         ║
-╠══════════════════════════════════════════════════════════════════╣
-║                                                                  ║
-║  1. Créez le bucket "audio-tracks" :                             ║
-║     → Dashboard > Storage > New Bucket                           ║
-║     → Name: audio-tracks                                         ║
-║     → Public: OUI                                                ║
-║                                                                  ║
-║  2. Ajoutez la policy pour autoriser les uploads (SQL Editor) :  ║
-║                                                                  ║
-║     CREATE POLICY "Allow public uploads"                         ║
-║     ON storage.objects FOR INSERT                                ║
-║     TO anon                                                      ║
-║     WITH CHECK (bucket_id = 'audio-tracks');                     ║
-║                                                                  ║
-║     CREATE POLICY "Allow public read"                            ║
-║     ON storage.objects FOR SELECT                                ║
-║     TO anon                                                      ║
-║     USING (bucket_id = 'audio-tracks');                          ║
-║                                                                  ║
-╚══════════════════════════════════════════════════════════════════╝
-  `);
+  console.log('%c═══════════════════════════════════════════════════════════════════', 'color: #8A2EFF; font-weight: bold');
+  console.log('%c   SUPABASE STORAGE - Configuration RLS requise', 'color: #FF2FB3; font-weight: bold; font-size: 14px');
+  console.log('%c═══════════════════════════════════════════════════════════════════', 'color: #8A2EFF; font-weight: bold');
+  console.log('');
+  console.log('%c📋 Copiez ces commandes SQL dans Supabase > SQL Editor:', 'color: #22c55e; font-weight: bold');
+  console.log('');
+  console.log(`-- 1. Policy INSERT (permettre les uploads)
+CREATE POLICY "Allow public uploads"
+ON storage.objects FOR INSERT
+TO anon
+WITH CHECK (bucket_id = 'audio-tracks');`);
+  console.log('');
+  console.log(`-- 2. Policy SELECT (permettre la lecture)
+CREATE POLICY "Allow public read"
+ON storage.objects FOR SELECT
+TO anon
+USING (bucket_id = 'audio-tracks');`);
+  console.log('');
+  console.log('%c═══════════════════════════════════════════════════════════════════', 'color: #8A2EFF; font-weight: bold');
+  console.log('%c🔗 Dashboard: https://supabase.com/dashboard/project/tfghpbgbtpgrjlhomlvz/sql', 'color: #3b82f6');
+  console.log('%c═══════════════════════════════════════════════════════════════════', 'color: #8A2EFF; font-weight: bold');
 }
 
 // ============================================
