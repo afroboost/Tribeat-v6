@@ -257,7 +257,7 @@ const Dashboard: React.FC = () => {
     setHasChanges(true);
   }, []);
 
-  // Save settings to Supabase
+  // Save settings to Supabase - SDK only, NO .json() or .text() calls
   const handleSave = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
       showToast('Supabase non configuré', 'error');
@@ -267,8 +267,8 @@ const Dashboard: React.FC = () => {
     setIsSaving(true);
     
     try {
-      // Prepare update data (exclude id and timestamps)
-      const updateData = {
+      // Prepare data for upsert (include id if exists for update)
+      const upsertData: Record<string, unknown> = {
         site_name: settings.site_name,
         site_slogan: settings.site_slogan,
         site_description: settings.site_description,
@@ -288,41 +288,30 @@ const Dashboard: React.FC = () => {
         stripe_pro_yearly: settings.stripe_pro_yearly,
         stripe_enterprise_monthly: settings.stripe_enterprise_monthly,
         stripe_enterprise_yearly: settings.stripe_enterprise_yearly,
-        updated_by: user?.id,
+        updated_at: new Date().toISOString(),
       };
 
-      let result;
-      
+      // Include id if we have one (for update)
       if (settings.id) {
-        // Update existing
-        result = await supabase
-          .from('site_settings')
-          .update(updateData)
-          .eq('id', settings.id)
-          .select()
-          .single();
-      } else {
-        // Insert new (shouldn't happen normally)
-        result = await supabase
-          .from('site_settings')
-          .insert(updateData)
-          .select()
-          .single();
+        upsertData.id = settings.id;
       }
 
-      if (result.error) {
-        console.error('[CMS] Save error:', result.error);
-        showToast(`Erreur: ${result.error.message}`, 'error');
+      // Use upsert with SDK - NO .select() to avoid stream issues
+      const { error } = await supabase
+        .from('site_settings')
+        .upsert(upsertData, { onConflict: 'id' });
+
+      if (error) {
+        console.error('[CMS] Save error:', error.message);
+        showToast(`Erreur: ${error.message}`, 'error');
         setIsSaving(false);
         return;
       }
 
       console.log('[CMS] ✅ Settings saved to Supabase');
       
-      // Update local state
-      const savedData = result.data as SiteSettings;
-      setSettings(savedData);
-      setOriginalSettings(savedData);
+      // Update local state with current settings
+      setOriginalSettings({ ...settings });
       setHasChanges(false);
       setDbStatus('connected');
       
@@ -356,14 +345,14 @@ const Dashboard: React.FC = () => {
         ],
       });
       
-      showToast('✅ Configuration sauvegardée dans Supabase !', 'success');
+      showToast('✅ Paramètres enregistrés !', 'success');
     } catch (err) {
       console.error('[CMS] Save exception:', err);
       showToast('Erreur lors de la sauvegarde', 'error');
     }
     
     setIsSaving(false);
-  }, [settings, user?.id, updateConfig, showToast]);
+  }, [settings, updateConfig, showToast]);
 
   // Reset to original
   const handleReset = useCallback(() => {
