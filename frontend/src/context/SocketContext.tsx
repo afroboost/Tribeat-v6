@@ -368,6 +368,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setUserVolume,
     syncPlaylist,
     syncPlayback,
+    broadcast,
     savePlaylistToDb,
     loadPlaylistFromDb,
     onMuted,
