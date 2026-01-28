@@ -849,6 +849,9 @@ export const SessionPage: React.FC = () => {
     }
   }, [sessionUrl, showToast]);
 
+  // Ref to track if "Go Live" toast has been shown (prevent infinite loop)
+  const hasShownLiveToast = useRef(false);
+
   // Handle audio state changes
   const handleAudioStateChange = useCallback((state: AudioState) => {
     setAudioState(state);
@@ -856,10 +859,18 @@ export const SessionPage: React.FC = () => {
 
   // Handle sync state changes
   const handleSyncStateChange = useCallback((state: SyncState) => {
-    setSyncState(state);
-    if (state.isLive && isHost) {
-      showToast('Session live démarrée !', 'success');
-    }
+    setSyncState(prevState => {
+      // Only show toast ONCE when transitioning to live state
+      if (state.isLive && !prevState?.isLive && isHost && !hasShownLiveToast.current) {
+        hasShownLiveToast.current = true;
+        showToast('Session live démarrée !', 'success');
+      }
+      // Reset flag when going offline
+      if (!state.isLive && prevState?.isLive) {
+        hasShownLiveToast.current = false;
+      }
+      return state;
+    });
   }, [showToast, isHost]);
 
   // Change nickname
