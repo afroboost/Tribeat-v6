@@ -282,6 +282,30 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 }}
               />
             </div>
+            
+            {/* Repeat Button (Host only) */}
+            {isHost && (
+              <button
+                onClick={cycleRepeatMode}
+                className={`p-2 transition-colors ${
+                  repeatMode === 'none' 
+                    ? 'text-white/40 hover:text-white/60' 
+                    : 'text-[#8A2EFF] hover:text-[#FF2FB3]'
+                }`}
+                title={
+                  repeatMode === 'none' ? 'Répétition désactivée' :
+                  repeatMode === 'one' ? 'Répéter ce titre' :
+                  'Répéter la playlist'
+                }
+                data-testid="repeat-btn"
+              >
+                {repeatMode === 'one' ? (
+                  <Repeat1 size={18} strokeWidth={2} />
+                ) : (
+                  <Repeat size={18} strokeWidth={repeatMode === 'all' ? 2.5 : 1.5} />
+                )}
+              </button>
+            )}
           </div>
 
           {/* Center: Play/Pause */}
